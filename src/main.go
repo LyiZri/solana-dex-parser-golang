@@ -1,0 +1,102 @@
+package main
+
+import (
+	"fmt"
+	"os"
+	"slices"
+	"strconv"
+	"time"
+
+	"github.com/go-solana-parse/src/config"
+	"github.com/go-solana-parse/src/model"
+	"github.com/go-solana-parse/src/solana"
+)
+
+func main() {
+	//
+	getData()
+}
+
+func getData() {
+	config.LoadSvcConfig()
+	// aws.S3UploadExample()
+	// google.GetBigQueryData()
+
+	// 支持命令行参数：go run main.go [startSlot] [endSlot] [batchSize]
+	var startSlot, endSlot, batchSize int
+	if len(os.Args) >= 3 {
+		startSlot, _ = strconv.Atoi(os.Args[1])
+		endSlot, _ = strconv.Atoi(os.Args[2])
+		if len(os.Args) >= 4 {
+			batchSize, _ = strconv.Atoi(os.Args[3])
+		} else {
+			batchSize = 10 // 默认每批10个
+		}
+		fmt.Printf("使用参数: slot %d-%d, 批量大小: %d\n", startSlot, endSlot, batchSize)
+	} else {
+		// 默认值
+		rountine := 500
+		startSlot = 337200528
+		endSlot = 337200528 + rountine
+		batchSize = 10 // 每批20个区块
+	}
+
+	// 使用新的批量请求方法
+	maxConcurrency := 25 // 25个并发的批量请求
+
+	fmt.Printf("🚀 开始批量请求模式\n")
+	fmt.Printf("📊 总slot数: %d\n", endSlot-startSlot)
+	fmt.Printf("📦 批量大小: %d (每次HTTP请求获取%d个区块)\n", batchSize, batchSize)
+	fmt.Printf("⚡ 并发数: %d\n", maxConcurrency)
+	fmt.Printf("🔢 HTTP请求总数: %d (vs 传统方式的 %d)\n",
+		(endSlot-startSlot+batchSize-1)/batchSize, endSlot-startSlot)
+
+	startTime := time.Now()
+
+	// 调用批量请求函数
+	results := solana.BatchGetBlockDataFastV2(
+		uint64(startSlot),
+		uint64(endSlot-1),
+		"3ed35a0b-35f6-4adb-8caa-5c72cd36b023",
+		batchSize,
+		maxConcurrency,
+	)
+
+	elapsed := time.Since(startTime)
+
+	// 处理结果 - 过滤包含特定token的交易
+	totalFilteredTxs := 0
+	for _, block := range results {
+		if block == nil || len(block.Transactions) == 0 {
+			continue
+		}
+
+		transactions := make([]model.Transaction, 0, len(block.Transactions))
+		for _, transaction := range block.Transactions {
+			if slices.Contains(
+				transaction.Message.AccountKeys,
+				"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA") {
+				transactions = append(transactions, transaction)
+			}
+		}
+
+		if len(transactions) > 0 {
+			totalFilteredTxs += len(transactions)
+			// rpc_call.CallDenoSolanaParser(slot, block)
+		}
+	}
+
+	fmt.Printf("\n🎯 最终统计:\n")
+	fmt.Printf("✅ 成功获取: %d/%d 个区块\n", len(results), endSlot-startSlot)
+	fmt.Printf("🔍 包含目标token的交易: %d\n", totalFilteredTxs)
+	fmt.Printf("⏱️  总耗时: %v\n", elapsed)
+	fmt.Printf("📈 速度: %.2f blocks/second\n", float64(len(results))/elapsed.Seconds())
+
+	// 计算效率提升
+	estimatedSingleRequests := endSlot - startSlot
+	actualBatchRequests := (endSlot - startSlot + batchSize - 1) / batchSize
+	fmt.Printf("🚀 请求效率: 减少了 %.1f%% 的HTTP请求 (%d -> %d)\n",
+		float64(estimatedSingleRequests-actualBatchRequests)/float64(estimatedSingleRequests)*100,
+		estimatedSingleRequests, actualBatchRequests)
+
+}

@@ -1,0 +1,4 @@
+.cursor
+config/
+test_logs/
+examples/
