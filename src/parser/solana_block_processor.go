@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/go-solana-parse/src/db"
-	"github.com/go-solana-parse/src/solana"
+	"github.com/go-solana-parse/src/model"
 )
 
 // SolanaBlockProcessor Solana 区块处理器
@@ -43,7 +43,7 @@ func NewSolanaBlockProcessor(database db.SwapTransactionDB) *SolanaBlockProcesso
 }
 
 // ProcessBlock 处理单个区块 - 主要入口点
-func (sbp *SolanaBlockProcessor) ProcessBlock(ctx context.Context, blockData solana.Block, blockNumber uint64, config ProcessorConfig) (*BlockProcessResult, error) {
+func (sbp *SolanaBlockProcessor) ProcessBlock(ctx context.Context, blockData model.Block, blockNumber uint64, config ProcessorConfig) (*BlockProcessResult, error) {
 	startTime := time.Now()
 
 	log.Printf("Processing block %d with %d transactions", blockNumber, len(blockData.Transactions))
@@ -151,20 +151,25 @@ func (sbp *SolanaBlockProcessor) ProcessBlocks(ctx context.Context, blocks []Blo
 }
 
 // GetTokenData 获取代币数据（带过滤）
-func (sbp *SolanaBlockProcessor) GetTokenData(ctx context.Context, filters db.TokenDataFilter) ([]TokenSwapFilterData, error) {
+func (sbp *SolanaBlockProcessor) GetTokenData(ctx context.Context, filters db.TokenDataFilter) ([]model.TokenSwapFilterData, error) {
 	if sbp.database == nil {
 		return nil, fmt.Errorf("database not configured")
 	}
 
-	return sbp.database.GetFilteredTokenData(ctx, filters)
+	transactions, err := sbp.database.GetFilteredTokenData(ctx, filters)
+	if err != nil {
+		return nil, err
+	}
+
+	return transactions, nil
 }
 
 // applyFilters 应用过滤器逻辑
-func (sbp *SolanaBlockProcessor) applyFilters(transactions []SwapTransaction) []TokenSwapFilterData {
+func (sbp *SolanaBlockProcessor) applyFilters(transactions []model.SwapTransaction) []model.TokenSwapFilterData {
 	// 转换为 SwapTransactionToken 格式
-	var tokenTransactions []SwapTransactionToken
+	var tokenTransactions []model.SwapTransactionToken
 	for _, tx := range transactions {
-		tokenTx := SwapTransactionToken{
+		tokenTx := model.SwapTransactionToken{
 			TxHash:          tx.TxHash,
 			TradeType:       tx.TradeType,
 			PoolAddress:     tx.PoolAddress,
@@ -237,21 +242,21 @@ func (sbp *SolanaBlockProcessor) GetStatistics(ctx context.Context) (*ProcessorS
 
 // BlockData 区块数据结构
 type BlockData struct {
-	Block       solana.Block
+	Block       model.Block
 	BlockNumber uint64
 }
 
 // BlockProcessResult 单个区块处理结果
 type BlockProcessResult struct {
-	BlockNumber          uint64                `json:"block_number"`
-	ProcessingTime       time.Duration         `json:"processing_time"`
-	TotalTransactions    int                   `json:"total_transactions"`
-	ValidTransactions    int                   `json:"valid_transactions"`
-	FilteredTransactions int                   `json:"filtered_transactions"`
-	DatabaseInserted     int                   `json:"database_inserted"`
-	Success              bool                  `json:"success"`
-	Error                string                `json:"error,omitempty"`
-	FilteredData         []TokenSwapFilterData `json:"filtered_data,omitempty"`
+	BlockNumber          uint64                      `json:"block_number"`
+	ProcessingTime       time.Duration               `json:"processing_time"`
+	TotalTransactions    int                         `json:"total_transactions"`
+	ValidTransactions    int                         `json:"valid_transactions"`
+	FilteredTransactions int                         `json:"filtered_transactions"`
+	DatabaseInserted     int                         `json:"database_inserted"`
+	Success              bool                        `json:"success"`
+	Error                string                      `json:"error,omitempty"`
+	FilteredData         []model.TokenSwapFilterData `json:"filtered_data,omitempty"`
 }
 
 // BatchProcessResult 批处理结果

@@ -17,10 +17,10 @@ type GetBlockResponse struct {
 
 // RPC response structure
 type RPCResponse struct {
-	JSONRPC string      `json:"jsonrpc"`
-	ID      int         `json:"id"`
-	Result  interface{} `json:"result"`
-	Error   *RPCError   `json:"error,omitempty"`
+	JSONRPC string    `json:"jsonrpc"`
+	ID      int       `json:"id"`
+	Result  *Block    `json:"result"`
+	Error   *RPCError `json:"error,omitempty"`
 }
 
 type RPCError struct {

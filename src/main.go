@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"slices"
 	"strconv"
@@ -9,12 +11,14 @@ import (
 
 	"github.com/go-solana-parse/src/config"
 	"github.com/go-solana-parse/src/model"
+	"github.com/go-solana-parse/src/parser"
 	"github.com/go-solana-parse/src/solana"
 )
 
 func main() {
 	//
 	getData()
+	// parsePerBlockData()
 }
 
 func getData() {
@@ -99,4 +103,41 @@ func getData() {
 		float64(estimatedSingleRequests-actualBatchRequests)/float64(estimatedSingleRequests)*100,
 		estimatedSingleRequests, actualBatchRequests)
 
+}
+
+func parsePerBlockData() {
+	config.LoadSvcConfig()
+
+	// 2. 创建处理器
+	handler := parser.NewSolanaBlockDataHandler()
+
+	slot := 337200528
+	blockData, err := solana.GetBlockData(uint64(slot), "3ed35a0b-35f6-4adb-8caa-5c72cd36b023")
+	if err != nil {
+		log.Fatalf("Failed to get block data: %v", err)
+	}
+
+	fmt.Println("hash is ", blockData.Blockhash)
+
+	versionedBlockResponse := model.VersionedBlockResponse(*blockData)
+
+	// 3. 处理区块数据
+	results, err := handler.HandleBlockData(versionedBlockResponse, uint64(slot))
+
+	if err != nil {
+		log.Fatalf("Failed to handle block data: %v", err)
+	}
+
+	// 自动完成：解析 → 转换 → 双写数据库
+	// db.NewMySQLSwapTransactionDB(mysqlDB)
+	// db.NewClickHouseSwapTransactionDB(clickhouseDB)
+	// 写入json文件
+
+	fmt.Println(len(results))
+
+	jsonData, err := json.Marshal(results)
+	if err != nil {
+		log.Fatalf("Failed to marshal block data: %v", err)
+	}
+	os.WriteFile("block_data.json", jsonData, 0644)
 }

@@ -6,17 +6,17 @@ import (
 	"strconv"
 
 	"github.com/go-solana-parse/src/config"
-	"github.com/go-solana-parse/src/solana"
+	"github.com/go-solana-parse/src/model"
 )
 
 // TransactionAdapter 交易适配器
 type TransactionAdapter struct {
-	transaction SolanaTransaction
-	config      config.ParseConfig
+	transaction model.SolanaTransaction
+	config      model.ParseConfig
 }
 
 // NewTransactionAdapter 创建新的交易适配器
-func NewTransactionAdapter(tx SolanaTransaction, cfg config.ParseConfig) *TransactionAdapter {
+func NewTransactionAdapter(tx model.SolanaTransaction, cfg model.ParseConfig) *TransactionAdapter {
 	return &TransactionAdapter{
 		transaction: tx,
 		config:      cfg,
@@ -35,15 +35,15 @@ func (ta *TransactionAdapter) GetSigner() string {
 }
 
 // GetFee 获取交易手续费
-func (ta *TransactionAdapter) GetFee() config.TokenAmount {
+func (ta *TransactionAdapter) GetFee() model.TokenAmount {
 	if ta.transaction.Meta != nil {
-		return config.TokenAmount{
+		return model.TokenAmount{
 			Amount:   strconv.FormatUint(ta.transaction.Meta.Fee, 10),
 			UIAmount: float64(ta.transaction.Meta.Fee) / 1e9, // SOL 小数位数
 			Decimals: 9,
 		}
 	}
-	return config.TokenAmount{
+	return model.TokenAmount{
 		Amount:   "0",
 		UIAmount: 0,
 		Decimals: 9,
@@ -51,7 +51,7 @@ func (ta *TransactionAdapter) GetFee() config.TokenAmount {
 }
 
 // GetAccountSOLBalanceChanges 获取账户 SOL 余额变化
-func (ta *TransactionAdapter) GetAccountSOLBalanceChanges(excludeWSOL bool, account string) *config.BalanceChange {
+func (ta *TransactionAdapter) GetAccountSOLBalanceChanges(excludeWSOL bool, account string) *model.BalanceChange {
 	if ta.transaction.Meta == nil {
 		return nil
 	}
@@ -74,7 +74,7 @@ func (ta *TransactionAdapter) GetAccountSOLBalanceChanges(excludeWSOL bool, acco
 
 	change := int64(postBalance) - int64(preBalance)
 
-	return &config.BalanceChange{
+	return &model.BalanceChange{
 		Before: new(big.Int).SetUint64(preBalance),
 		After:  new(big.Int).SetUint64(postBalance),
 		Change: new(big.Int).SetInt64(change),
@@ -82,15 +82,15 @@ func (ta *TransactionAdapter) GetAccountSOLBalanceChanges(excludeWSOL bool, acco
 }
 
 // GetAccountTokenBalanceChanges 获取账户代币余额变化
-func (ta *TransactionAdapter) GetAccountTokenBalanceChanges(includeAuthority bool, account string) map[string]*config.BalanceChange {
-	changes := make(map[string]*config.BalanceChange)
+func (ta *TransactionAdapter) GetAccountTokenBalanceChanges(includeAuthority bool, account string) map[string]*model.BalanceChange {
+	changes := make(map[string]*model.BalanceChange)
 
 	if ta.transaction.Meta == nil {
 		return changes
 	}
 
 	// 处理前置代币余额
-	preTokenBalances := make(map[string]solana.TokenBalance)
+	preTokenBalances := make(map[string]model.TokenBalance)
 	for _, balance := range ta.transaction.Meta.PreTokenBalances {
 		key := fmt.Sprintf("%s-%d", balance.Mint, balance.AccountIndex)
 		preTokenBalances[key] = balance
@@ -122,7 +122,7 @@ func (ta *TransactionAdapter) GetAccountTokenBalanceChanges(includeAuthority boo
 
 		change := int64(postAmount) - int64(preBalance)
 
-		changes[postBalance.Mint] = &config.BalanceChange{
+		changes[postBalance.Mint] = &model.BalanceChange{
 			Before: new(big.Int).SetUint64(preBalance),
 			After:  new(big.Int).SetUint64(postAmount),
 			Change: new(big.Int).SetInt64(change),
@@ -148,16 +148,16 @@ func (ta *TransactionAdapter) IsSupportedToken(mint string) bool {
 }
 
 // GetInstructions 获取所有指令
-func (ta *TransactionAdapter) GetInstructions() []solana.TransactionInstruction {
+func (ta *TransactionAdapter) GetInstructions() []model.TransactionInstruction {
 	return ta.transaction.Transaction.Message.Instructions
 }
 
 // GetInnerInstructions 获取内部指令
-func (ta *TransactionAdapter) GetInnerInstructions() []solana.InnerInstruction {
+func (ta *TransactionAdapter) GetInnerInstructions() []model.InnerInstruction {
 	if ta.transaction.Meta != nil {
 		return ta.transaction.Meta.InnerInstructions
 	}
-	return []solana.InnerInstruction{}
+	return []model.InnerInstruction{}
 }
 
 // GetAccountKeys 获取账户密钥列表
@@ -200,7 +200,7 @@ func (ta *TransactionAdapter) IsSuccess() bool {
 }
 
 // GetProgramIdFromInstruction 从指令获取程序 ID
-func (ta *TransactionAdapter) GetProgramIdFromInstruction(instruction solana.TransactionInstruction) string {
+func (ta *TransactionAdapter) GetProgramIdFromInstruction(instruction model.TransactionInstruction) string {
 	accountKeys := ta.GetAccountKeys()
 	if instruction.ProgramIdIndex < len(accountKeys) {
 		return accountKeys[instruction.ProgramIdIndex]

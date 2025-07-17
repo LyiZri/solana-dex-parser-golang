@@ -2,7 +2,7 @@ package parser
 
 import (
 	"github.com/go-solana-parse/src/config"
-	"github.com/go-solana-parse/src/solana"
+	"github.com/go-solana-parse/src/model"
 )
 
 // InstructionClassifier 指令分类器
@@ -49,33 +49,33 @@ func (ic *InstructionClassifier) GetAllProgramIDs() []string {
 }
 
 // GetInstructions 获取特定程序 ID 的指令
-func (ic *InstructionClassifier) GetInstructions(programID string) []ClassifiedInstruction {
-	var classified []ClassifiedInstruction
+func (ic *InstructionClassifier) GetInstructions(programID string) []model.ClassifiedInstruction {
+	var classified []model.ClassifiedInstruction
 
 	// 处理主要指令
 	for i, instruction := range ic.adapter.GetInstructions() {
 		if ic.adapter.GetProgramIdFromInstruction(instruction) == programID {
-			classified = append(classified, ClassifiedInstruction{
-				ProgramID:    programID,
-				Instructions: []solana.TransactionInstruction{instruction},
-				Index:        i,
+			classified = append(classified, model.ClassifiedInstruction{
+				ProgramID:   programID,
+				Instruction: instruction,
+				OuterIndex:  i,
 			})
 		}
 	}
 
 	// 处理内部指令
 	for _, innerInstructionGroup := range ic.adapter.GetInnerInstructions() {
-		var innerInstructions []solana.TransactionInstruction
+		var innerInstructions []model.TransactionInstruction
 		for _, innerInstruction := range innerInstructionGroup.Instructions {
 			if ic.adapter.GetProgramIdFromInstruction(innerInstruction) == programID {
 				innerInstructions = append(innerInstructions, innerInstruction)
 			}
 		}
 		if len(innerInstructions) > 0 {
-			classified = append(classified, ClassifiedInstruction{
-				ProgramID:    programID,
-				Instructions: innerInstructions,
-				Index:        innerInstructionGroup.Index,
+			classified = append(classified, model.ClassifiedInstruction{
+				ProgramID:   programID,
+				Instruction: innerInstructions,
+				OuterIndex:  innerInstructionGroup.Index,
 			})
 		}
 	}
@@ -84,8 +84,8 @@ func (ic *InstructionClassifier) GetInstructions(programID string) []ClassifiedI
 }
 
 // GetDexInstructions 获取 DEX 相关的指令
-func (ic *InstructionClassifier) GetDexInstructions() map[string][]ClassifiedInstruction {
-	dexInstructions := make(map[string][]ClassifiedInstruction)
+func (ic *InstructionClassifier) GetDexInstructions() map[string][]model.ClassifiedInstruction {
+	dexInstructions := make(map[string][]model.ClassifiedInstruction)
 
 	allProgramIDs := ic.GetAllProgramIDs()
 	for _, programID := range allProgramIDs {
@@ -112,8 +112,8 @@ func (ic *InstructionClassifier) HasDexInstructions() bool {
 }
 
 // GetJupiterInstructions 获取 Jupiter 相关的指令
-func (ic *InstructionClassifier) GetJupiterInstructions() []ClassifiedInstruction {
-	var jupiterInstructions []ClassifiedInstruction
+func (ic *InstructionClassifier) GetJupiterInstructions() []model.ClassifiedInstruction {
+	var jupiterInstructions []model.ClassifiedInstruction
 
 	allProgramIDs := ic.GetAllProgramIDs()
 	for _, programID := range allProgramIDs {

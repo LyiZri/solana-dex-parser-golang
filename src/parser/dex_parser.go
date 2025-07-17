@@ -5,8 +5,8 @@ import (
 	"log"
 	"time"
 
-	"github.com/go-solana-parse/src/config"
-	"github.com/go-solana-parse/src/solana"
+	configsvc "github.com/go-solana-parse/src/config"
+	"github.com/go-solana-parse/src/model"
 )
 
 // DexParser DEX 解析器主结构
@@ -23,11 +23,11 @@ func NewDexParser() *DexParser {
 }
 
 // ParseBlockData 解析整个区块数据 - 对应 TS 版本的 parseBlockData 方法
-func (dp *DexParser) ParseBlockData(blockData VersionedBlockResponse, blockNumber uint64) ([]ParseResult, error) {
+func (dp *DexParser) ParseBlockData(blockData model.VersionedBlockResponse, blockNumber uint64) ([]model.ParseResult, error) {
 	start := time.Now()
 
 	// 过滤有效交易（排除失败交易）
-	var validTransactions []solana.Transaction
+	var validTransactions []model.Transaction
 	for _, tx := range blockData.Transactions {
 		if tx.Meta == nil || tx.Meta.Err == nil {
 			validTransactions = append(validTransactions, tx)
@@ -35,9 +35,9 @@ func (dp *DexParser) ParseBlockData(blockData VersionedBlockResponse, blockNumbe
 	}
 
 	// 解析每个有效交易
-	var parseResults []ParseResult
+	var parseResults []model.ParseResult
 	for _, transaction := range validTransactions {
-		solanaTransaction := SolanaTransaction{
+		solanaTransaction := model.SolanaTransaction{
 			Transaction: transaction,
 			Meta:        transaction.Meta,
 			BlockTime:   blockData.BlockTime,
@@ -53,9 +53,9 @@ func (dp *DexParser) ParseBlockData(blockData VersionedBlockResponse, blockNumbe
 }
 
 // ParseAllComplete 完整解析单个交易 - 对应 TS 版本的 parseAllComplete 方法
-func (dp *DexParser) ParseAllComplete(tx SolanaTransaction, config *config.ParseConfig) ParseResult {
+func (dp *DexParser) ParseAllComplete(tx model.SolanaTransaction, config *model.ParseConfig) model.ParseResult {
 	if config == nil {
-		config = &config.ParseConfig{
+		config = &model.ParseConfig{
 			TryUnknownDEX: true,
 		}
 	}
@@ -66,24 +66,24 @@ func (dp *DexParser) ParseAllComplete(tx SolanaTransaction, config *config.Parse
 
 // parseWithClassifier 使用分类器解析交易 - 对应 TS 版本的 parseWithClassifier 方法
 func (dp *DexParser) parseWithClassifier(
-	tx SolanaTransaction,
-	config config.ParseConfig,
+	tx model.SolanaTransaction,
+	config model.ParseConfig,
 	parseType string,
-) ParseResult {
-	result := ParseResult{
+) model.ParseResult {
+	result := model.ParseResult{
 		State:              true,
-		Fee:                config.TokenAmount{Amount: "0", UIAmount: 0, Decimals: 9},
-		Trades:             []config.TradeInfo{},
-		Liquidities:        []config.PoolEvent{},
-		Transfers:          []config.TransferData{},
-		TokenBalanceChange: make(map[string]*config.BalanceChange),
+		Fee:                model.TokenAmount{Amount: "0", UIAmount: 0, Decimals: 9},
+		Trades:             []model.TradeInfo{},
+		Liquidities:        []model.PoolEvent{},
+		Transfers:          []model.TransferData{},
+		TokenBalanceChange: make(map[string]*model.BalanceChange),
 		MoreEvents:         make(map[string]interface{}),
-		Result: EnhancedResult{
-			Trades:             []ResSwapStruct{},
-			Liquidities:        []ResLpInfoStruct{},
-			Tokens:             []ResTokenMetadataStruct{},
-			TokenPrices:        []ResTokenPriceStruct{},
-			UserTradingSummary: []ResUserTradingSummaryStruct{},
+		Result: model.EnhancedResult{
+			Trades:             []model.ResSwapStruct{},
+			Liquidities:        []model.ResLpInfoStruct{},
+			Tokens:             []model.ResTokenMetadataStruct{},
+			TokenPrices:        []model.ResTokenPriceStruct{},
+			UserTradingSummary: []model.ResUserTradingSummaryStruct{},
 		},
 	}
 
@@ -116,7 +116,7 @@ func (dp *DexParser) parseWithClassifier(
 	result.TokenBalanceChange = adapter.GetAccountTokenBalanceChanges(true, adapter.GetSigner())
 
 	// 优先处理 Jupiter 系列协议
-	if dexInfo.ProgramID != "" && config.IsJupiterFamily(dexInfo.ProgramID) {
+	if dexInfo.ProgramID != "" && configsvc.IsJupiterFamily(dexInfo.ProgramID) {
 		if parseType == "trades" || parseType == "all" {
 			jupiterInstructions := classifier.GetInstructions(dexInfo.ProgramID)
 			trades := dp.parseJupiterTransaction(adapter, dexInfo, transferActions, jupiterInstructions)
@@ -148,9 +148,9 @@ func (dp *DexParser) parseWithClassifier(
 				// 处理未知 DEX 程序
 				transfers := dp.getTransfersForProgram(transferActions, programID)
 				if len(transfers) >= 2 && dp.hasSupportedToken(transfers, adapter) {
-					trade := utils.ProcessSwapData(transfers, config.DexInfo{
+					trade := utils.ProcessSwapData(transfers, model.DexInfo{
 						ProgramID: programID,
-						AMM:       config.GetProgramName(programID),
+						AMM:       configsvc.GetProgramName(programID),
 					})
 					if trade != nil {
 						enhancedTrade := utils.AttachTokenTransferInfo(*trade, transferActions)
@@ -203,7 +203,7 @@ func (dp *DexParser) parseWithClassifier(
 }
 
 // enhanceParseResultComplete 增强解析结果 - 对应 TS 版本的 enhanceParseResultComplete 方法
-func (dp *DexParser) enhanceParseResultComplete(parseResult ParseResult) ParseResult {
+func (dp *DexParser) enhanceParseResultComplete(parseResult model.ParseResult) model.ParseResult {
 	// 处理 token 信息
 	parseResult.Result.Tokens = dp.extractTokenMetadata(parseResult)
 
@@ -224,10 +224,10 @@ func (dp *DexParser) enhanceParseResultComplete(parseResult ParseResult) ParseRe
 
 // 辅助方法实现
 
-func (dp *DexParser) parseJupiterTransaction(adapter *TransactionAdapter, dexInfo config.DexInfo, transferActions map[string][]config.TransferData, instructions []ClassifiedInstruction) []config.TradeInfo {
+func (dp *DexParser) parseJupiterTransaction(adapter *TransactionAdapter, dexInfo model.DexInfo, transferActions map[string][]model.TransferData, instructions []model.ClassifiedInstruction) []model.TradeInfo {
 	// Jupiter 特殊解析逻辑
 	// TODO: 实现 Jupiter 聚合器的特殊处理
-	return []config.TradeInfo{}
+	return []model.TradeInfo{}
 }
 
 func (dp *DexParser) hasParser(programID string) bool {
@@ -235,21 +235,21 @@ func (dp *DexParser) hasParser(programID string) bool {
 	return exists
 }
 
-func (dp *DexParser) parseWithSpecificParser(programID string, adapter *TransactionAdapter, dexInfo config.DexInfo, transferActions map[string][]config.TransferData, instructions []ClassifiedInstruction) []config.TradeInfo {
+func (dp *DexParser) parseWithSpecificParser(programID string, adapter *TransactionAdapter, dexInfo model.DexInfo, transferActions map[string][]model.TransferData, instructions []model.ClassifiedInstruction) []model.TradeInfo {
 	// TODO: 实现特定协议的解析器
-	return []config.TradeInfo{}
+	return []model.TradeInfo{}
 }
 
-func (dp *DexParser) getTransfersForProgram(transferActions map[string][]config.TransferData, programID string) []config.TransferData {
+func (dp *DexParser) getTransfersForProgram(transferActions map[string][]model.TransferData, programID string) []model.TransferData {
 	for key, transfers := range transferActions {
 		if len(key) >= len(programID) && key[:len(programID)] == programID {
 			return transfers
 		}
 	}
-	return []config.TransferData{}
+	return []model.TransferData{}
 }
 
-func (dp *DexParser) hasSupportedToken(transfers []config.TransferData, adapter *TransactionAdapter) bool {
+func (dp *DexParser) hasSupportedToken(transfers []model.TransferData, adapter *TransactionAdapter) bool {
 	for _, transfer := range transfers {
 		if adapter.IsSupportedToken(transfer.Info.Mint) {
 			return true
@@ -258,33 +258,33 @@ func (dp *DexParser) hasSupportedToken(transfers []config.TransferData, adapter 
 	return false
 }
 
-func (dp *DexParser) parseLiquidityEvents(programID string, adapter *TransactionAdapter, transferActions map[string][]config.TransferData, instructions []ClassifiedInstruction) []config.PoolEvent {
+func (dp *DexParser) parseLiquidityEvents(programID string, adapter *TransactionAdapter, transferActions map[string][]model.TransferData, instructions []model.ClassifiedInstruction) []model.PoolEvent {
 	// TODO: 实现流动性事件解析
-	return []config.PoolEvent{}
+	return []model.PoolEvent{}
 }
 
-func (dp *DexParser) parseTransfers(programID string, adapter *TransactionAdapter, dexInfo config.DexInfo, transferActions map[string][]config.TransferData, instructions []ClassifiedInstruction) []config.TransferData {
+func (dp *DexParser) parseTransfers(programID string, adapter *TransactionAdapter, dexInfo model.DexInfo, transferActions map[string][]model.TransferData, instructions []model.ClassifiedInstruction) []model.TransferData {
 	// TODO: 实现转账解析
-	return []config.TransferData{}
+	return []model.TransferData{}
 }
 
-func (dp *DexParser) processMoreEvents(parseType string, result *ParseResult, allProgramIDs []string, adapter *TransactionAdapter, transferActions map[string][]config.TransferData, classifier *InstructionClassifier) {
+func (dp *DexParser) processMoreEvents(parseType string, result *model.ParseResult, allProgramIDs []string, adapter *TransactionAdapter, transferActions map[string][]model.TransferData, classifier *InstructionClassifier) {
 	if parseType == "all" {
 		// 处理 Pump.fun 事件
-		if contains(allProgramIDs, config.DEX_PROGRAMS["PUMP_FUN"].ID) {
+		if contains(allProgramIDs, configsvc.DEX_PROGRAMS["PUMP_FUN"].ID) {
 			// TODO: 实现 Pump.fun 事件解析
 		}
 
 		// 处理 Raydium Launchpad 事件
-		if contains(allProgramIDs, config.DEX_PROGRAMS["RAYDIUM_LCP"].ID) {
+		if contains(allProgramIDs, configsvc.DEX_PROGRAMS["RAYDIUM_LCP"].ID) {
 			// TODO: 实现 Raydium Launchpad 事件解析
 		}
 	}
 }
 
-func (dp *DexParser) deduplicateTrades(trades []config.TradeInfo) []config.TradeInfo {
+func (dp *DexParser) deduplicateTrades(trades []model.TradeInfo) []model.TradeInfo {
 	seen := make(map[string]bool)
-	var result []config.TradeInfo
+	var result []model.TradeInfo
 
 	for _, trade := range trades {
 		key := fmt.Sprintf("%s-%s", trade.IDX, trade.Signature)
@@ -297,30 +297,30 @@ func (dp *DexParser) deduplicateTrades(trades []config.TradeInfo) []config.Trade
 	return result
 }
 
-func (dp *DexParser) extractTokenMetadata(parseResult ParseResult) []ResTokenMetadataStruct {
+func (dp *DexParser) extractTokenMetadata(parseResult model.ParseResult) []model.ResTokenMetadataStruct {
 	// TODO: 实现代币元数据提取
-	return []ResTokenMetadataStruct{}
+	return []model.ResTokenMetadataStruct{}
 }
 
-func (dp *DexParser) calculateTokenPrices(parseResult ParseResult) []ResTokenPriceStruct {
+func (dp *DexParser) calculateTokenPrices(parseResult model.ParseResult) []model.ResTokenPriceStruct {
 	// TODO: 实现代币价格计算
-	return []ResTokenPriceStruct{}
+	return []model.ResTokenPriceStruct{}
 }
 
-func (dp *DexParser) generateUserTradingSummary(parseResult ParseResult) []ResUserTradingSummaryStruct {
+func (dp *DexParser) generateUserTradingSummary(parseResult model.ParseResult) []model.ResUserTradingSummaryStruct {
 	// TODO: 实现用户交易汇总
-	return []ResUserTradingSummaryStruct{}
+	return []model.ResUserTradingSummaryStruct{}
 }
 
-func (dp *DexParser) enhanceLiquidityData(parseResult *ParseResult) {
+func (dp *DexParser) enhanceLiquidityData(parseResult *model.ParseResult) {
 	// TODO: 实现流动性数据增强
 }
 
-func (dp *DexParser) formatAllTrades(parseResult ParseResult) []ResSwapStruct {
-	var result []ResSwapStruct
+func (dp *DexParser) formatAllTrades(parseResult model.ParseResult) []model.ResSwapStruct {
+	var result []model.ResSwapStruct
 
 	for _, trade := range parseResult.Trades {
-		result = append(result, ResSwapStruct{
+		result = append(result, model.ResSwapStruct{
 			TransactionSignature: trade.Signature,
 			BlockTime:            trade.BlockTime,
 			UserAddress:          trade.Signer,

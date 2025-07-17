@@ -170,7 +170,7 @@ func GetBlockData(slotNum uint64, apiKey string) (*model.Block, error) {
 		return nil, fmt.Errorf("block not found for slot %d", slotNum)
 	}
 
-	return response.Result.(*model.Block), nil
+	return response.Result, nil
 }
 
 // BatchGetBlockRequest 批量getBlock请求结构

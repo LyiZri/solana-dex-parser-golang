@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/go-solana-parse/src/config"
+	"github.com/go-solana-parse/src/model"
 )
 
 // SolanaBlockDataHandler Solana 区块数据处理器
@@ -22,7 +23,7 @@ func NewSolanaBlockDataHandler() *SolanaBlockDataHandler {
 }
 
 // HandleBlockData 处理区块数据 - 对应 TS 版本的 handleBlockData 方法
-func (handler *SolanaBlockDataHandler) HandleBlockData(blockData VersionedBlockResponse, blockNumber uint64) ([]SwapTransaction, error) {
+func (handler *SolanaBlockDataHandler) HandleBlockData(blockData model.VersionedBlockResponse, blockNumber uint64) ([]model.SwapTransaction, error) {
 	log.Printf("SolanaBlockDataHandler.HandleBlockData blockNumber: %d", blockNumber)
 
 	// 1. 调用 DexParser 解析区块数据
@@ -32,7 +33,7 @@ func (handler *SolanaBlockDataHandler) HandleBlockData(blockData VersionedBlockR
 	}
 
 	// 2. 过滤出包含交易的结果
-	var filteredTransactions []ParseResult
+	var filteredTransactions []model.ParseResult
 	for _, tx := range parseResult {
 		if len(tx.Result.Trades) > 0 && len(tx.Trades) > 0 {
 			filteredTransactions = append(filteredTransactions, tx)
@@ -40,7 +41,7 @@ func (handler *SolanaBlockDataHandler) HandleBlockData(blockData VersionedBlockR
 	}
 
 	// 3. 转换数据格式并收集
-	var swapTransactionArray []SwapTransaction
+	var swapTransactionArray []model.SwapTransaction
 	for _, tx := range filteredTransactions {
 		for tradeIndex := range tx.Trades {
 			swapTransaction, err := handler.ConvertData(tx, tradeIndex, blockNumber)
@@ -59,7 +60,7 @@ func (handler *SolanaBlockDataHandler) HandleBlockData(blockData VersionedBlockR
 }
 
 // ConvertData 转换数据 - 对应 TS 版本的 convertData 方法
-func (handler *SolanaBlockDataHandler) ConvertData(parseResult ParseResult, index int, blockNumber uint64) (*SwapTransaction, error) {
+func (handler *SolanaBlockDataHandler) ConvertData(parseResult model.ParseResult, index int, blockNumber uint64) (*model.SwapTransaction, error) {
 	if index >= len(parseResult.Result.Trades) || index >= len(parseResult.Trades) {
 		return nil, fmt.Errorf("index out of range")
 	}
@@ -76,7 +77,7 @@ func (handler *SolanaBlockDataHandler) ConvertData(parseResult ParseResult, inde
 	var poolAddress string = tradeDetail.PoolAddress
 
 	// 根据交易类型确定输入输出
-	if tradeType == config.TradeTypeBuy {
+	if tradeType == model.TradeTypeBuy {
 		tokenAmount = formatFloat(tradeDetail.TokenOutAmount)
 		tokenSymbol = tradeDetail.TokenOutSymbol
 		tokenAddress = tradeDetail.TokenOutMint
@@ -132,7 +133,7 @@ func (handler *SolanaBlockDataHandler) ConvertData(parseResult ParseResult, inde
 	usdPriceStr := strconv.FormatFloat(usdPrice, 'f', -1, 64)
 	usdAmountStr := strconv.FormatFloat(usdAmount, 'f', -1, 64)
 
-	data := &SwapTransaction{
+	data := &model.SwapTransaction{
 		TxHash:          txHash,
 		TransactionTime: transactionTime,
 		WalletAddress:   walletAddress,
@@ -154,8 +155,8 @@ func (handler *SolanaBlockDataHandler) ConvertData(parseResult ParseResult, inde
 }
 
 // FilterTokenData 过滤代币数据 - 对应 TS 版本的 filterTokenData 方法
-func (handler *SolanaBlockDataHandler) FilterTokenData(data []SwapTransactionToken) []TokenSwapFilterData {
-	var result []TokenSwapFilterData
+func (handler *SolanaBlockDataHandler) FilterTokenData(data []model.SwapTransactionToken) []model.TokenSwapFilterData {
+	var result []model.TokenSwapFilterData
 
 	for _, transaction := range data {
 		// 检查黑名单代币
@@ -187,16 +188,16 @@ func (handler *SolanaBlockDataHandler) FilterTokenData(data []SwapTransactionTok
 		}
 
 		// 检查最小交易金额
-		minAmount, _ := config.SNAP_SHOT_CONFIG.MinTransactionAmount.Float64()
+		minAmount, _ := model.SNAP_SHOT_CONFIG.MinTransactionAmount.Float64()
 		if transaction.USDAmount < minAmount {
 			continue
 		}
 
-		filteredData := TokenSwapFilterData{
+		filteredData := model.TokenSwapFilterData{
 			UserAddress:     transaction.WalletAddress,
 			PoolAddress:     transaction.PoolAddress,
 			TxHash:          transaction.TxHash,
-			IsBuy:           transaction.TradeType == string(config.ESwapTradeTypeBUY),
+			IsBuy:           transaction.TradeType == string(model.ESwapTradeTypeBUY),
 			BlockHeight:     transaction.BlockHeight,
 			TokenSymbol:     transaction.TokenSymbol,
 			TokenAddress:    transaction.TokenAddress,

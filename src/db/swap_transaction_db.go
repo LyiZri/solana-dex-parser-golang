@@ -12,14 +12,14 @@ import (
 	// _ "github.com/go-sql-driver/mysql"     // MySQL driver
 	// _ "github.com/ClickHouse/clickhouse-go/v2" // ClickHouse driver
 
-	"go-solana-explore/src/parser"
+	"github.com/go-solana-parse/src/model"
 )
 
 // SwapTransactionDB 交换交易数据库接口
 type SwapTransactionDB interface {
-	InsertSwapTransactions(ctx context.Context, transactions []parser.SwapTransaction) error
-	GetSwapTransactions(ctx context.Context, filters SwapTransactionFilter) ([]parser.SwapTransactionToken, error)
-	GetFilteredTokenData(ctx context.Context, filters TokenDataFilter) ([]parser.TokenSwapFilterData, error)
+	InsertSwapTransactions(ctx context.Context, transactions []model.SwapTransaction) error
+	GetSwapTransactions(ctx context.Context, filters SwapTransactionFilter) ([]model.SwapTransactionToken, error)
+	GetFilteredTokenData(ctx context.Context, filters TokenDataFilter) ([]model.TokenSwapFilterData, error)
 }
 
 // SwapTransactionFilter 查询过滤器
@@ -65,7 +65,7 @@ func NewClickHouseSwapTransactionDB(db *sql.DB) *ClickHouseSwapTransactionDB {
 // MySQL 实现
 
 // InsertSwapTransactions MySQL 批量插入交换交易
-func (m *MySQLSwapTransactionDB) InsertSwapTransactions(ctx context.Context, transactions []parser.SwapTransaction) error {
+func (m *MySQLSwapTransactionDB) InsertSwapTransactions(ctx context.Context, transactions []model.SwapTransaction) error {
 	if len(transactions) == 0 {
 		return nil
 	}
@@ -85,7 +85,7 @@ func (m *MySQLSwapTransactionDB) InsertSwapTransactions(ctx context.Context, tra
 }
 
 // insertToTokenTable 插入到代币表 (对应 TS 版本的 solana_swap_transactions_token)
-func (m *MySQLSwapTransactionDB) insertToTokenTable(ctx context.Context, transactions []parser.SwapTransaction) error {
+func (m *MySQLSwapTransactionDB) insertToTokenTable(ctx context.Context, transactions []model.SwapTransaction) error {
 	query := `
 	INSERT INTO solana_swap_transactions_token (
 		tx_hash, transaction_time, wallet_address, token_amount, token_symbol, 
@@ -124,7 +124,7 @@ func (m *MySQLSwapTransactionDB) insertToTokenTable(ctx context.Context, transac
 }
 
 // insertToWalletTable 插入到钱包表 (对应 TS 版本的 solana_swap_transactions_wallet)
-func (m *MySQLSwapTransactionDB) insertToWalletTable(ctx context.Context, transactions []parser.SwapTransaction) error {
+func (m *MySQLSwapTransactionDB) insertToWalletTable(ctx context.Context, transactions []model.SwapTransaction) error {
 	query := `
 	INSERT INTO solana_swap_transactions_wallet (
 		tx_hash, transaction_time, wallet_address, token_amount, token_symbol, 
@@ -163,7 +163,7 @@ func (m *MySQLSwapTransactionDB) insertToWalletTable(ctx context.Context, transa
 }
 
 // GetSwapTransactions MySQL 查询交换交易 (对应 TS 版本的 getXDaysData)
-func (m *MySQLSwapTransactionDB) GetSwapTransactions(ctx context.Context, filters SwapTransactionFilter) ([]parser.SwapTransactionToken, error) {
+func (m *MySQLSwapTransactionDB) GetSwapTransactions(ctx context.Context, filters SwapTransactionFilter) ([]model.SwapTransactionToken, error) {
 	query := `
 	SELECT tx_hash, trade_type, pool_address, block_height, 
 		   UNIX_TIMESTAMP(transaction_time) as transaction_time,
@@ -219,9 +219,9 @@ func (m *MySQLSwapTransactionDB) GetSwapTransactions(ctx context.Context, filter
 	}
 	defer rows.Close()
 
-	var transactions []parser.SwapTransactionToken
+	var transactions []model.SwapTransactionToken
 	for rows.Next() {
-		var tx parser.SwapTransactionToken
+		var tx model.SwapTransactionToken
 		err := rows.Scan(
 			&tx.TxHash, &tx.TradeType, &tx.PoolAddress, &tx.BlockHeight,
 			&tx.TransactionTime, &tx.WalletAddress, &tx.TokenAmount,
@@ -240,7 +240,7 @@ func (m *MySQLSwapTransactionDB) GetSwapTransactions(ctx context.Context, filter
 }
 
 // GetFilteredTokenData MySQL 获取过滤后的代币数据
-func (m *MySQLSwapTransactionDB) GetFilteredTokenData(ctx context.Context, filters TokenDataFilter) ([]parser.TokenSwapFilterData, error) {
+func (m *MySQLSwapTransactionDB) GetFilteredTokenData(ctx context.Context, filters TokenDataFilter) ([]model.SwapTransactionToken, error) {
 	dbFilters := SwapTransactionFilter{
 		StartTime:    filters.StartTime,
 		EndTime:      filters.EndTime,
@@ -253,15 +253,17 @@ func (m *MySQLSwapTransactionDB) GetFilteredTokenData(ctx context.Context, filte
 		return nil, err
 	}
 
-	// 使用 SolanaBlockDataHandler 进行过滤
-	handler := parser.ExportSolanaBlockDataHandler
-	return handler.FilterTokenData(transactions), nil
+	return transactions, nil
+
+	// // 使用 SolanaBlockDataHandler 进行过滤
+	// handler := parser.ExportSolanaBlockDataHandler
+	// return handler.FilterTokenData(transactions), nil
 }
 
 // ClickHouse 实现
 
 // InsertSwapTransactions ClickHouse 批量插入交换交易
-func (c *ClickHouseSwapTransactionDB) InsertSwapTransactions(ctx context.Context, transactions []parser.SwapTransaction) error {
+func (c *ClickHouseSwapTransactionDB) InsertSwapTransactions(ctx context.Context, transactions []model.SwapTransaction) error {
 	if len(transactions) == 0 {
 		return nil
 	}
@@ -281,7 +283,7 @@ func (c *ClickHouseSwapTransactionDB) InsertSwapTransactions(ctx context.Context
 }
 
 // insertToTokenTable ClickHouse 插入到代币表
-func (c *ClickHouseSwapTransactionDB) insertToTokenTable(ctx context.Context, transactions []parser.SwapTransaction) error {
+func (c *ClickHouseSwapTransactionDB) insertToTokenTable(ctx context.Context, transactions []model.SwapTransaction) error {
 	query := `
 	INSERT INTO solana_swap_transactions_token (
 		tx_hash, transaction_time, wallet_address, token_amount, token_symbol, 
@@ -316,7 +318,7 @@ func (c *ClickHouseSwapTransactionDB) insertToTokenTable(ctx context.Context, tr
 }
 
 // insertToWalletTable ClickHouse 插入到钱包表
-func (c *ClickHouseSwapTransactionDB) insertToWalletTable(ctx context.Context, transactions []parser.SwapTransaction) error {
+func (c *ClickHouseSwapTransactionDB) insertToWalletTable(ctx context.Context, transactions []model.SwapTransaction) error {
 	query := `
 	INSERT INTO solana_swap_transactions_wallet (
 		tx_hash, transaction_time, wallet_address, token_amount, token_symbol, 
@@ -351,7 +353,7 @@ func (c *ClickHouseSwapTransactionDB) insertToWalletTable(ctx context.Context, t
 }
 
 // GetSwapTransactions ClickHouse 查询交换交易
-func (c *ClickHouseSwapTransactionDB) GetSwapTransactions(ctx context.Context, filters SwapTransactionFilter) ([]parser.SwapTransactionToken, error) {
+func (c *ClickHouseSwapTransactionDB) GetSwapTransactions(ctx context.Context, filters SwapTransactionFilter) ([]model.SwapTransactionToken, error) {
 	query := `
 	SELECT tx_hash, trade_type, pool_address, block_height, 
 		   toUnixTimestamp(transaction_time) as transaction_time,
@@ -407,9 +409,9 @@ func (c *ClickHouseSwapTransactionDB) GetSwapTransactions(ctx context.Context, f
 	}
 	defer rows.Close()
 
-	var transactions []parser.SwapTransactionToken
+	var transactions []model.SwapTransactionToken
 	for rows.Next() {
-		var tx parser.SwapTransactionToken
+		var tx model.SwapTransactionToken
 		err := rows.Scan(
 			&tx.TxHash, &tx.TradeType, &tx.PoolAddress, &tx.BlockHeight,
 			&tx.TransactionTime, &tx.WalletAddress, &tx.TokenAmount,
@@ -428,7 +430,7 @@ func (c *ClickHouseSwapTransactionDB) GetSwapTransactions(ctx context.Context, f
 }
 
 // GetFilteredTokenData ClickHouse 获取过滤后的代币数据
-func (c *ClickHouseSwapTransactionDB) GetFilteredTokenData(ctx context.Context, filters TokenDataFilter) ([]parser.TokenSwapFilterData, error) {
+func (c *ClickHouseSwapTransactionDB) GetFilteredTokenData(ctx context.Context, filters TokenDataFilter) ([]model.SwapTransactionToken, error) {
 	dbFilters := SwapTransactionFilter{
 		StartTime:    filters.StartTime,
 		EndTime:      filters.EndTime,
@@ -441,15 +443,17 @@ func (c *ClickHouseSwapTransactionDB) GetFilteredTokenData(ctx context.Context, 
 		return nil, err
 	}
 
-	// 使用 SolanaBlockDataHandler 进行过滤
-	handler := parser.ExportSolanaBlockDataHandler
-	return handler.FilterTokenData(transactions), nil
+	return transactions, nil
+
+	// // 使用 SolanaBlockDataHandler 进行过滤
+	// handler := parser.ExportSolanaBlockDataHandler
+	// return handler.FilterTokenData(transactions), nil
 }
 
 // 工具函数：对应 TS 版本的数据库查询方法
 
 // GetDataByBlockHeightRange 基于区块高度范围获取交易数据 (对应 TS 版本)
-func (m *MySQLSwapTransactionDB) GetDataByBlockHeightRange(ctx context.Context, startBlockHeight, endBlockHeight uint64) ([]parser.SwapTransactionToken, error) {
+func (m *MySQLSwapTransactionDB) GetDataByBlockHeightRange(ctx context.Context, startBlockHeight, endBlockHeight uint64) ([]model.SwapTransactionToken, error) {
 	query := `
 	SELECT tx_hash, trade_type, pool_address, block_height, 
 		   UNIX_TIMESTAMP(transaction_time) as transaction_time,
@@ -467,9 +471,9 @@ func (m *MySQLSwapTransactionDB) GetDataByBlockHeightRange(ctx context.Context, 
 	}
 	defer rows.Close()
 
-	var transactions []parser.SwapTransactionToken
+	var transactions []model.SwapTransactionToken
 	for rows.Next() {
-		var tx parser.SwapTransactionToken
+		var tx model.SwapTransactionToken
 		err := rows.Scan(
 			&tx.TxHash, &tx.TradeType, &tx.PoolAddress, &tx.BlockHeight,
 			&tx.TransactionTime, &tx.WalletAddress, &tx.TokenAmount,
@@ -488,7 +492,7 @@ func (m *MySQLSwapTransactionDB) GetDataByBlockHeightRange(ctx context.Context, 
 }
 
 // GetDataByBlockHeightRange ClickHouse 版本
-func (c *ClickHouseSwapTransactionDB) GetDataByBlockHeightRange(ctx context.Context, startBlockHeight, endBlockHeight uint64) ([]parser.SwapTransactionToken, error) {
+func (c *ClickHouseSwapTransactionDB) GetDataByBlockHeightRange(ctx context.Context, startBlockHeight, endBlockHeight uint64) ([]model.SwapTransactionToken, error) {
 	query := `
 	SELECT tx_hash, trade_type, pool_address, block_height, 
 		   toUnixTimestamp(transaction_time) as transaction_time,
@@ -506,9 +510,9 @@ func (c *ClickHouseSwapTransactionDB) GetDataByBlockHeightRange(ctx context.Cont
 	}
 	defer rows.Close()
 
-	var transactions []parser.SwapTransactionToken
+	var transactions []model.SwapTransactionToken
 	for rows.Next() {
-		var tx parser.SwapTransactionToken
+		var tx model.SwapTransactionToken
 		err := rows.Scan(
 			&tx.TxHash, &tx.TradeType, &tx.PoolAddress, &tx.BlockHeight,
 			&tx.TransactionTime, &tx.WalletAddress, &tx.TokenAmount,

@@ -1,24 +1,21 @@
-package parser
+package model
 
 import (
 	"math/big"
-
-	"github.com/go-solana-parse/src/config"
-	"github.com/go-solana-parse/src/solana"
 )
 
 // ParseResult 解析结果
 type ParseResult struct {
-	State              bool                             `json:"state"`
-	Fee                config.TokenAmount               `json:"fee"`
-	Trades             []config.TradeInfo               `json:"trades"`
-	Liquidities        []config.PoolEvent               `json:"liquidities"`
-	Transfers          []config.TransferData            `json:"transfers"`
-	SOLBalanceChange   *config.BalanceChange            `json:"sol_balance_change"`
-	TokenBalanceChange map[string]*config.BalanceChange `json:"token_balance_change"`
-	MoreEvents         map[string]interface{}           `json:"more_events"`
-	Msg                string                           `json:"msg"`
-	Result             EnhancedResult                   `json:"result"`
+	State              bool                      `json:"state"`
+	Fee                TokenAmount               `json:"fee"`
+	Trades             []TradeInfo               `json:"trades"`
+	Liquidities        []PoolEvent               `json:"liquidities"`
+	Transfers          []TransferData            `json:"transfers"`
+	SOLBalanceChange   *BalanceChange            `json:"sol_balance_change"`
+	TokenBalanceChange map[string]*BalanceChange `json:"token_balance_change"`
+	MoreEvents         map[string]interface{}    `json:"more_events"`
+	Msg                string                    `json:"msg"`
+	Result             EnhancedResult            `json:"result"`
 }
 
 // EnhancedResult 增强的解析结果
@@ -103,21 +100,14 @@ type SwapTransaction struct {
 }
 
 // VersionedBlockResponse 版本化区块响应（与现有 solana.Block 兼容）
-type VersionedBlockResponse = solana.Block
+type VersionedBlockResponse = Block
 
 // SolanaTransaction Solana 交易结构
 type SolanaTransaction struct {
-	Transaction solana.Transaction      `json:"transaction"`
-	Meta        *solana.TransactionMeta `json:"meta"`
-	BlockTime   *int64                  `json:"blockTime"`
-	Slot        uint64                  `json:"slot"`
-}
-
-// ClassifiedInstruction 分类后的指令
-type ClassifiedInstruction struct {
-	ProgramID    string                          `json:"program_id"`
-	Instructions []solana.TransactionInstruction `json:"instructions"`
-	Index        int                             `json:"index"`
+	Transaction Transaction      `json:"transaction"`
+	Meta        *TransactionMeta `json:"meta"`
+	BlockTime   *int64           `json:"blockTime"`
+	Slot        uint64           `json:"slot"`
 }
 
 // TokenSwapFilterData 代币交换过滤数据（对应 TS 版本）
@@ -156,4 +146,12 @@ type SwapTransactionToken struct {
 	QuotePrice      float64 `json:"quote_price"`
 	USDPrice        float64 `json:"usd_price"`
 	USDAmount       float64 `json:"usd_amount"`
+}
+
+// ClassifiedInstruction 分类指令 - 对应 TS 版本的 ClassifiedInstruction
+type ClassifiedInstruction struct {
+	Instruction interface{} `json:"instruction"`
+	ProgramID   string      `json:"programId"`
+	OuterIndex  int         `json:"outerIndex"`
+	InnerIndex  *int        `json:"innerIndex,omitempty"`
 }
