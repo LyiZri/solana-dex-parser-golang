@@ -17,15 +17,32 @@ type LoadBalancer struct {
 
 // 全局负载均衡器实例
 var globalLoadBalancer = &LoadBalancer{
-	ports:   make([]int, 0, 31), // 8000-8030 共31个端口
+	ports:   make([]int, 0, 10), // 预留容量
 	current: 0,
 }
 
-// 初始化负载均衡器
+// 初始化负载均衡器 - 默认端口范围
 func init() {
-	// 初始化端口范围 8000-8030
-	for port := 8000; port <= 8030; port++ {
-		globalLoadBalancer.ports = append(globalLoadBalancer.ports, port)
+	// 默认初始化为8000-8009（10个端口）
+	setPortsFromStart(8000, 10)
+}
+
+// 设置端口范围（从指定端口开始，使用6个端口）
+func SetPortRange(startPort int) {
+	globalLoadBalancer.mutex.Lock()
+	defer globalLoadBalancer.mutex.Unlock()
+
+	setPortsFromStart(startPort, 6) // 每个进程分配6个端口
+	globalLoadBalancer.current = 0  // 重置计数器
+
+	fmt.Printf("🌐 端口范围已设置: %d-%d\n", startPort, startPort+5)
+}
+
+// 内部函数：设置端口列表
+func setPortsFromStart(startPort, count int) {
+	globalLoadBalancer.ports = make([]int, 0, count)
+	for i := 0; i < count; i++ {
+		globalLoadBalancer.ports = append(globalLoadBalancer.ports, startPort+i)
 	}
 }
 
@@ -33,6 +50,10 @@ func init() {
 func (lb *LoadBalancer) getNextPort() int {
 	lb.mutex.Lock()
 	defer lb.mutex.Unlock()
+
+	if len(lb.ports) == 0 {
+		return 8000 // 安全回退
+	}
 
 	port := lb.ports[lb.current]
 	lb.current = (lb.current + 1) % len(lb.ports)

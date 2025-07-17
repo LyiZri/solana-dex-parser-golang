@@ -26,8 +26,8 @@ func getData() {
 	// aws.S3UploadExample()
 	// google.GetBigQueryData()
 
-	// 支持命令行参数：go run main.go [startSlot] [endSlot] [batchSize]
-	var startSlot, endSlot, batchSize int
+	// 支持命令行参数：go run main.go [startSlot] [endSlot] [batchSize] [portStart]
+	var startSlot, endSlot, batchSize, portStart int
 	if len(os.Args) >= 3 {
 		startSlot, _ = strconv.Atoi(os.Args[1])
 		endSlot, _ = strconv.Atoi(os.Args[2])
@@ -36,13 +36,23 @@ func getData() {
 		} else {
 			batchSize = 10 // 默认每批10个
 		}
-		fmt.Printf("使用参数: slot %d-%d, 批量大小: %d\n", startSlot, endSlot, batchSize)
+		if len(os.Args) >= 5 {
+			portStart, _ = strconv.Atoi(os.Args[4])
+		} else {
+			portStart = 8000 // 默认从8000开始
+		}
+		fmt.Printf("使用参数: slot %d-%d, 批量大小: %d, 端口起始: %d\n", startSlot, endSlot, batchSize, portStart)
+
+		// 设置此进程的端口范围
+		rpccall.SetPortRange(portStart)
 	} else {
 		// 默认值
 		rountine := 500
 		startSlot = 337200528
 		endSlot = 337200528 + rountine
 		batchSize = 10 // 每批20个区块
+		portStart = 8000
+		rpccall.SetPortRange(portStart)
 	}
 
 	// 使用新的批量请求方法

@@ -10,10 +10,11 @@ echo "🧪 多进程测试模式"
 # START_SLOT=337200528    # 起始slot
 # PROCESS_COUNT=25         # 5个进程测试
 # BATCH_SIZE=10           # 每批10个
-TOTAL_BLOCKS=1000        # 测试100个区块
+TOTAL_BLOCKS=3000        # 测试100个区块
 START_SLOT=347797409    # 起始slot
-PROCESS_COUNT=5         # 5个进程测试
+PROCESS_COUNT=30         # 5个进程测试
 BATCH_SIZE=10          # 每批10个
+PORTS_PER_PROCESS=1    # 每个进程分配6个端口
 
 BLOCKS_PER_PROCESS=$((TOTAL_BLOCKS / PROCESS_COUNT))
 
@@ -21,6 +22,7 @@ echo "📊 测试目标: $TOTAL_BLOCKS 个区块"
 echo "🔢 进程数: $PROCESS_COUNT"
 echo "📦 每进程: $BLOCKS_PER_PROCESS 个区块"
 echo "📋 批量大小: $BATCH_SIZE"
+echo "🌐 端口分配: 每进程 $PORTS_PER_PROCESS 个端口 (8000-8029)"
 
 mkdir -p test_logs
 
@@ -38,11 +40,15 @@ for i in $(seq 0 $((PROCESS_COUNT - 1))); do
     
     ACTUAL_BLOCKS=$((PROC_END_SLOT - PROC_START_SLOT))
     
-    echo "🎬 测试进程 $i: slot $PROC_START_SLOT-$((PROC_END_SLOT - 1)) ($ACTUAL_BLOCKS 区块)"
+    # 计算端口范围：进程i使用端口 8000 + i*6 到 8000 + i*6 + 5
+    PORT_START=$((8000 + i * PORTS_PER_PROCESS))
+    PORT_END=$((PORT_START + PORTS_PER_PROCESS - 1))
+    
+    echo "🎬 测试进程 $i: slot $PROC_START_SLOT-$((PROC_END_SLOT - 1)) ($ACTUAL_BLOCKS 区块) -> 端口 $PORT_START-$PORT_END"
     
     {
         PROCESS_START_TIME=$(date +%s)
-        go run ./src/main.go $PROC_START_SLOT $PROC_END_SLOT $BATCH_SIZE
+        go run ./src/main.go $PROC_START_SLOT $PROC_END_SLOT $BATCH_SIZE $PORT_START
         PROCESS_END_TIME=$(date +%s)
         PROCESS_DURATION=$((PROCESS_END_TIME - PROCESS_START_TIME))
         if [ $PROCESS_DURATION -gt 0 ]; then
@@ -50,7 +56,7 @@ for i in $(seq 0 $((PROCESS_COUNT - 1))); do
         else
             PROCESS_SPEED="很快"
         fi
-        echo "✅ 测试进程 $i: $ACTUAL_BLOCKS 区块, ${PROCESS_DURATION}s, $PROCESS_SPEED blocks/s"
+        echo "✅ 测试进程 $i: $ACTUAL_BLOCKS 区块, ${PROCESS_DURATION}s, $PROCESS_SPEED blocks/s (端口 $PORT_START-$PORT_END)"
     } > test_logs/process_$i.log 2>&1 &
 done
 
