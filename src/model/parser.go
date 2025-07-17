@@ -104,7 +104,7 @@ type VersionedBlockResponse = Block
 
 // SolanaTransaction Solana 交易结构
 type SolanaTransaction struct {
-	Transaction Transaction      `json:"transaction"`
+	Transaction TransactionInfo  `json:"transaction"`
 	Meta        *TransactionMeta `json:"meta"`
 	BlockTime   *int64           `json:"blockTime"`
 	Slot        uint64           `json:"slot"`

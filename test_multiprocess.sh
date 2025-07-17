@@ -6,10 +6,14 @@
 echo "🧪 多进程测试模式"
 
 # 测试配置 - 较小的数量用于快速测试
+# TOTAL_BLOCKS=4000        # 测试100个区块
+# START_SLOT=337200528    # 起始slot
+# PROCESS_COUNT=25         # 5个进程测试
+# BATCH_SIZE=10           # 每批10个
 TOTAL_BLOCKS=1000        # 测试100个区块
-START_SLOT=337200528    # 起始slot
-PROCESS_COUNT=10         # 5个进程测试
-BATCH_SIZE=10           # 每批10个
+START_SLOT=347797409    # 起始slot
+PROCESS_COUNT=5         # 5个进程测试
+BATCH_SIZE=10          # 每批10个
 
 BLOCKS_PER_PROCESS=$((TOTAL_BLOCKS / PROCESS_COUNT))
 

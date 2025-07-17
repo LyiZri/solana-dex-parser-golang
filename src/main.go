@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"slices"
 	"strconv"
 	"time"
 
 	"github.com/go-solana-parse/src/config"
 	"github.com/go-solana-parse/src/model"
 	"github.com/go-solana-parse/src/parser"
+	rpccall "github.com/go-solana-parse/src/rpc_call"
 	"github.com/go-solana-parse/src/solana"
 )
 
@@ -70,25 +70,54 @@ func getData() {
 
 	// 处理结果 - 过滤包含特定token的交易
 	totalFilteredTxs := 0
-	for _, block := range results {
+
+	fullBlockData := []model.ParseBlockDataDenoReq{}
+
+	for slot, block := range results {
 		if block == nil || len(block.Transactions) == 0 {
 			continue
 		}
 
-		transactions := make([]model.Transaction, 0, len(block.Transactions))
+		transactions := []model.TransactionInfo{}
 		for _, transaction := range block.Transactions {
-			if slices.Contains(
-				transaction.Message.AccountKeys,
-				"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA") {
-				transactions = append(transactions, transaction)
+			for _, account := range transaction.Transaction.Message.AccountKeys {
+				if account == "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" {
+					transactions = append(transactions, transaction)
+					break
+				}
 			}
 		}
 
 		if len(transactions) > 0 {
 			totalFilteredTxs += len(transactions)
-			// rpc_call.CallDenoSolanaParser(slot, block)
 		}
+
+		block.Transactions = transactions
+
+		fullBlockData = append(fullBlockData, model.ParseBlockDataDenoReq{
+			BlockNum:  strconv.Itoa(int(slot)),
+			BlockData: *block,
+		})
+
+		// err := rpccall.SendParseDataToDeno(strconv.Itoa(int(slot)), *block)
+
+		// endTime := time.Now()
+		// fmt.Println("send parse data to deno time is ", endTime.Sub(startTime))
+
+		// if err != nil {
+		// 	log.Fatalf("Failed to send parse data to deno: %v", err)
+		// }
+
 	}
+
+	startTime = time.Now()
+	err := rpccall.SendMultipleParseDataToDeno(fullBlockData)
+	if err != nil {
+		log.Fatalf("Failed to send parse data to deno: %v", err)
+	}
+
+	endTime := time.Now()
+	fmt.Println("send multiple parse data to deno time is ", endTime.Sub(startTime))
 
 	fmt.Printf("\n🎯 最终统计:\n")
 	fmt.Printf("✅ 成功获取: %d/%d 个区块\n", len(results), endSlot-startSlot)

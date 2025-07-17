@@ -25,10 +25,10 @@ func NewTransactionAdapter(tx model.SolanaTransaction, cfg model.ParseConfig) *T
 
 // GetSigner 获取交易签名者
 func (ta *TransactionAdapter) GetSigner() string {
-	if len(ta.transaction.Transaction.Signatures) > 0 {
+	if len(ta.transaction.Transaction.Transaction.Signatures) > 0 {
 		// 通常第一个签名者是交易发起者
-		if len(ta.transaction.Transaction.Message.AccountKeys) > 0 {
-			return ta.transaction.Transaction.Message.AccountKeys[0]
+		if len(ta.transaction.Transaction.Transaction.Message.AccountKeys) > 0 {
+			return ta.transaction.Transaction.Transaction.Message.AccountKeys[0]
 		}
 	}
 	return ""
@@ -58,7 +58,7 @@ func (ta *TransactionAdapter) GetAccountSOLBalanceChanges(excludeWSOL bool, acco
 
 	// 查找账户在 accountKeys 中的索引
 	accountIndex := -1
-	for i, key := range ta.transaction.Transaction.Message.AccountKeys {
+	for i, key := range ta.transaction.Transaction.Transaction.Message.AccountKeys {
 		if key == account {
 			accountIndex = i
 			break
@@ -101,8 +101,8 @@ func (ta *TransactionAdapter) GetAccountTokenBalanceChanges(includeAuthority boo
 		key := fmt.Sprintf("%s-%d", postBalance.Mint, postBalance.AccountIndex)
 
 		// 检查是否是目标账户
-		if postBalance.AccountIndex < len(ta.transaction.Transaction.Message.AccountKeys) {
-			accountKey := ta.transaction.Transaction.Message.AccountKeys[postBalance.AccountIndex]
+		if postBalance.AccountIndex < len(ta.transaction.Transaction.Transaction.Message.AccountKeys) {
+			accountKey := ta.transaction.Transaction.Transaction.Message.AccountKeys[postBalance.AccountIndex]
 			if accountKey != account && !includeAuthority {
 				continue
 			}
@@ -149,7 +149,7 @@ func (ta *TransactionAdapter) IsSupportedToken(mint string) bool {
 
 // GetInstructions 获取所有指令
 func (ta *TransactionAdapter) GetInstructions() []model.TransactionInstruction {
-	return ta.transaction.Transaction.Message.Instructions
+	return ta.transaction.Transaction.Transaction.Message.Instructions
 }
 
 // GetInnerInstructions 获取内部指令
@@ -162,7 +162,7 @@ func (ta *TransactionAdapter) GetInnerInstructions() []model.InnerInstruction {
 
 // GetAccountKeys 获取账户密钥列表
 func (ta *TransactionAdapter) GetAccountKeys() []string {
-	return ta.transaction.Transaction.Message.AccountKeys
+	return ta.transaction.Transaction.Transaction.Message.AccountKeys
 }
 
 // GetLogMessages 获取日志消息
@@ -175,8 +175,8 @@ func (ta *TransactionAdapter) GetLogMessages() []string {
 
 // GetSignature 获取交易签名
 func (ta *TransactionAdapter) GetSignature() string {
-	if len(ta.transaction.Transaction.Signatures) > 0 {
-		return ta.transaction.Transaction.Signatures[0]
+	if len(ta.transaction.Transaction.Transaction.Signatures) > 0 {
+		return ta.transaction.Transaction.Transaction.Signatures[0]
 	}
 	return ""
 }

@@ -27,7 +27,7 @@ func (dp *DexParser) ParseBlockData(blockData model.VersionedBlockResponse, bloc
 	start := time.Now()
 
 	// 过滤有效交易（排除失败交易）
-	var validTransactions []model.Transaction
+	var validTransactions []model.TransactionInfo
 	for _, tx := range blockData.Transactions {
 		if tx.Meta == nil || tx.Meta.Err == nil {
 			validTransactions = append(validTransactions, tx)
@@ -93,7 +93,7 @@ func (dp *DexParser) parseWithClassifier(
 				panic(r)
 			}
 			result.State = false
-			result.Msg = fmt.Sprintf("Parse error: %v %v", tx.Transaction.Signatures[0], r)
+			result.Msg = fmt.Sprintf("Parse error: %v %v", tx.Transaction.Transaction.Signatures[0], r)
 			log.Printf("Parse error: %v", r)
 		}
 	}()

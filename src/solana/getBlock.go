@@ -236,6 +236,7 @@ func processBatch(slotNums []uint64, apiKey string, client *http.Client) map[uin
 	url := fmt.Sprintf("https://mainnet.helius-rpc.com/?api-key=%s", apiKey)
 
 	jsonData, err := json.Marshal(batchRequest)
+
 	if err != nil {
 		fmt.Printf("批量请求序列化失败: %v\n", err)
 		return make(map[uint64]*model.Block)
@@ -267,6 +268,7 @@ func processBatch(slotNums []uint64, apiKey string, client *http.Client) map[uin
 	var batchResponse BatchGetBlockResponse
 	if err := json.Unmarshal(body, &batchResponse); err != nil {
 		fmt.Printf("解析批量响应失败: %v\n", err)
+		fmt.Println(string(body))
 		return make(map[uint64]*model.Block)
 	}
 

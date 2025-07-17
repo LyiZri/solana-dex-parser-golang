@@ -30,13 +30,15 @@ type RPCError struct {
 }
 
 // Transaction structure
-type Transaction struct {
-	Signatures []string           `json:"signatures"`
-	Message    TransactionMessage `json:"message"`
-	Meta       *TransactionMeta   `json:"meta,omitempty"`
+type TransactionInfo struct {
+	Transaction struct {
+		Signatures []string `json:"signatures"`
+		Message    Message  `json:"message"`
+	} `json:"transaction"`
+	Meta *TransactionMeta `json:"meta,omitempty"`
 }
 
-type TransactionMessage struct {
+type Message struct {
 	AccountKeys         []string                 `json:"accountKeys"`
 	Header              TransactionHeader        `json:"header"`
 	Instructions        []TransactionInstruction `json:"instructions"`
@@ -112,13 +114,13 @@ type LoadedAddresses struct {
 
 // Block structure representing a Solana block
 type Block struct {
-	BlockHeight       *uint64       `json:"blockHeight"`
-	BlockTime         *int64        `json:"blockTime"`
-	Blockhash         string        `json:"blockhash"`
-	ParentSlot        uint64        `json:"parentSlot"`
-	PreviousBlockhash string        `json:"previousBlockhash"`
-	Transactions      []Transaction `json:"transactions"`
-	Rewards           []Reward      `json:"rewards,omitempty"`
+	BlockHeight       *uint64           `json:"blockHeight"`
+	BlockTime         *int64            `json:"blockTime"`
+	Blockhash         string            `json:"blockhash"`
+	ParentSlot        uint64            `json:"parentSlot"`
+	PreviousBlockhash string            `json:"previousBlockhash"`
+	Transactions      []TransactionInfo `json:"transactions"`
+	Rewards           []Reward          `json:"rewards,omitempty"`
 }
 
 // BlockResult represents the result of a block fetch operation
