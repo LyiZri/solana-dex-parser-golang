@@ -75,12 +75,11 @@ func SendParseDataToDeno(blockNum string, blockData model.Block) error {
 
 	// 使用负载均衡获取URL
 	url := globalLoadBalancer.getNextURL()
-	body, err := util.PostReq(url, req)
+	_, err := util.PostReq(url, req)
 	if err != nil {
+		fmt.Println("send parse data to deno error", err)
 		return err
 	}
-
-	fmt.Println(string(body))
 	return nil
 }
 

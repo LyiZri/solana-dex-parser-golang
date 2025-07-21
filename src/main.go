@@ -30,7 +30,7 @@ func main() {
 	// startSlot := uint64(263922023)
 	startSlot := uint64(247806009)
 
-	endSlot := uint64(347803510)
+	endSlot := uint64(347769511)
 
 	cycleSize := 100
 

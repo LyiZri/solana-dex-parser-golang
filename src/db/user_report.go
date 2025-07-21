@@ -45,3 +45,41 @@ func (p *UserReport) GetUserReport(db *gorm.DB, address string) (*UserReport, er
 	}
 	return p, nil
 }
+
+func (p *UserReport) InsertUserReport(db *gorm.DB) error {
+	err := db.Create(p).Error
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (p *UserReport) UpdateUserReport(db *gorm.DB) error {
+	err := db.Model(p).Where("address = ?", p.Address).Updates(p).Error
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (p *UserReport) InsertMultipleUserReport(db *gorm.DB, userReports []UserReport) error {
+	tx := db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	err := tx.Create(&userReports).Error
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	err = tx.Commit().Error
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	return nil
+}
