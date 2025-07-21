@@ -187,6 +187,8 @@ func GetMultipleBlocksData(slotNums []uint64, apiKey string, batchSize int) map[
 	results := make(map[uint64]*model.Block)
 	client := getHighPerfClient()
 
+	wg := sync.WaitGroup{}
+
 	// 分批处理
 	for i := 0; i < len(slotNums); i += batchSize {
 		end := i + batchSize
@@ -195,13 +197,21 @@ func GetMultipleBlocksData(slotNums []uint64, apiKey string, batchSize int) map[
 		}
 
 		batch := slotNums[i:end]
-		batchResults := processBatch(batch, apiKey, client)
 
-		// 合并结果
-		for slot, block := range batchResults {
-			results[slot] = block
-		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			batchResults := processBatch(batch, apiKey, client)
+
+			// 合并结果
+			for slot, block := range batchResults {
+				results[slot] = block
+			}
+		}()
 	}
+
+	wg.Wait()
 
 	return results
 }
@@ -238,13 +248,11 @@ func processBatch(slotNums []uint64, apiKey string, client *http.Client) map[uin
 	jsonData, err := json.Marshal(batchRequest)
 
 	if err != nil {
-		fmt.Printf("批量请求序列化失败: %v\n", err)
 		return make(map[uint64]*model.Block)
 	}
 
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
-		fmt.Printf("创建批量请求失败: %v\n", err)
 		return make(map[uint64]*model.Block)
 	}
 
@@ -268,7 +276,6 @@ func processBatch(slotNums []uint64, apiKey string, client *http.Client) map[uin
 	var batchResponse BatchGetBlockResponse
 	if err := json.Unmarshal(body, &batchResponse); err != nil {
 		fmt.Printf("解析批量响应失败: %v\n", err)
-		fmt.Println(string(body))
 		return make(map[uint64]*model.Block)
 	}
 
@@ -282,7 +289,6 @@ func processBatch(slotNums []uint64, apiKey string, client *http.Client) map[uin
 		slotNum := slotNums[i]
 
 		if response.Error != nil {
-			fmt.Printf("Slot %d 错误: %s (code: %d)\n", slotNum, response.Error.Message, response.Error.Code)
 			continue
 		}
 
@@ -302,8 +308,6 @@ func BatchGetBlockDataFastV2(startSlot, endSlot uint64, apiKey string, batchSize
 	}
 
 	results := make(map[uint64]*model.Block)
-	var mu sync.Mutex
-	var wg sync.WaitGroup
 
 	// 按batchSize分组
 	var batches [][]uint64
@@ -317,36 +321,21 @@ func BatchGetBlockDataFastV2(startSlot, endSlot uint64, apiKey string, batchSize
 
 	fmt.Printf("📦 创建 %d 个批次，每批 %d 个slot\n", len(batches), batchSize)
 
-	// 使用channel控制并发
-	semaphore := make(chan struct{}, maxConcurrency)
 	startTime := time.Now()
 
 	for i, batch := range batches {
-		wg.Add(1)
 
-		go func(batchID int, slotBatch []uint64) {
-			defer wg.Done()
+		// 处理这一批
+		batchResults := GetMultipleBlocksData(batch, apiKey, batchSize)
 
-			// 获取并发许可
-			semaphore <- struct{}{}
-			defer func() { <-semaphore }()
-
-			// 处理这一批
-			batchResults := GetMultipleBlocksData(slotBatch, apiKey, batchSize)
-
-			// 合并结果
-			mu.Lock()
-			for slot, block := range batchResults {
-				results[slot] = block
-			}
-			fmt.Printf("✅ 批次 %d 完成: %d/%d 个slot成功\n",
-				batchID, len(batchResults), len(slotBatch))
-			mu.Unlock()
-
-		}(i, batch)
+		// 合并结果
+		for slot, block := range batchResults {
+			results[slot] = block
+		}
+		fmt.Printf("✅ 批次 %d 完成: %d/%d 个slot成功\n",
+			i, len(batchResults), len(batch))
 	}
 
-	wg.Wait()
 	elapsed := time.Since(startTime)
 
 	fmt.Printf("\n🎯 批量请求完成!\n")

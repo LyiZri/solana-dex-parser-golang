@@ -1,4 +1,4 @@
 .cursor
-config/
+config-yaml/
 test_logs/
 examples/

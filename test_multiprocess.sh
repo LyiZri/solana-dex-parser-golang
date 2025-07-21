@@ -1,28 +1,37 @@
 #!/bin/bash
 
-# 多进程测试脚本 - 小规模测试
+# 多进程循环测试脚本 - 小规模测试倒序循环功能
 # 使用方法: ./test_multiprocess.sh
+# 特点: 从最新区块开始处理，逐步回到旧区块
 
-echo "🧪 多进程测试模式"
+echo "🧪 多进程倒序循环测试模式"
 
-# 测试配置 - 较小的数量用于快速测试
-# TOTAL_BLOCKS=4000        # 测试100个区块
-# START_SLOT=337200528    # 起始slot
-# PROCESS_COUNT=25         # 5个进程测试
-# BATCH_SIZE=10           # 每批10个
-TOTAL_BLOCKS=3000        # 测试100个区块
-START_SLOT=347797409    # 起始slot
-PROCESS_COUNT=30         # 5个进程测试
-BATCH_SIZE=10          # 每批10个
-PORTS_PER_PROCESS=1    # 每个进程分配6个端口
+# 测试配置 - 使用具体的区块范围进行小规模测试
+START_SLOT=347797409     # 起始区块号
+END_SLOT=347806409       # 结束区块号 (测试9000个区块)
+CYCLE_SIZE=1000          # 每次循环1000个区块  
+PROCESS_COUNT=5          # 5个进程测试
+BATCH_SIZE=10            # 每次HTTP请求10个区块
+PORTS_PER_PROCESS=1      # 每个进程分配1个端口
 
-BLOCKS_PER_PROCESS=$((TOTAL_BLOCKS / PROCESS_COUNT))
+# 计算总区块数
+TOTAL_BLOCKS=$((END_SLOT - START_SLOT))
 
-echo "📊 测试目标: $TOTAL_BLOCKS 个区块"
+echo "📊 区块范围: $START_SLOT - $END_SLOT"
+echo "📊 总区块数: $TOTAL_BLOCKS 个区块"
+echo "🔄 每次循环: $CYCLE_SIZE 个区块"
 echo "🔢 进程数: $PROCESS_COUNT"
-echo "📦 每进程: $BLOCKS_PER_PROCESS 个区块"
-echo "📋 批量大小: $BATCH_SIZE"
-echo "🌐 端口分配: 每进程 $PORTS_PER_PROCESS 个端口 (8000-8029)"
+echo "📦 批量大小: $BATCH_SIZE"
+echo "🌐 端口分配: 8000-8004 (每进程1个端口)"
+
+# 计算统计信息
+BLOCKS_PER_PROCESS=$((TOTAL_BLOCKS / PROCESS_COUNT))
+CYCLES_PER_PROCESS=$(((BLOCKS_PER_PROCESS + CYCLE_SIZE - 1) / CYCLE_SIZE))
+TOTAL_CYCLES=$((CYCLES_PER_PROCESS * PROCESS_COUNT))
+
+echo "📋 每进程处理: $BLOCKS_PER_PROCESS 个区块"
+echo "🔄 每进程循环数: $CYCLES_PER_PROCESS"
+echo "🎯 总循环数: $TOTAL_CYCLES"
 
 mkdir -p test_logs
 
@@ -31,33 +40,29 @@ START_TIME=$(date +%s)
 echo "⚡ 启动测试进程..."
 
 for i in $(seq 0 $((PROCESS_COUNT - 1))); do
-    PROC_START_SLOT=$((START_SLOT + i * BLOCKS_PER_PROCESS))
-    PROC_END_SLOT=$((PROC_START_SLOT + BLOCKS_PER_PROCESS))
-    
-    if [ $i -eq $((PROCESS_COUNT - 1)) ]; then
-        PROC_END_SLOT=$((START_SLOT + TOTAL_BLOCKS))
-    fi
-    
-    ACTUAL_BLOCKS=$((PROC_END_SLOT - PROC_START_SLOT))
-    
-    # 计算端口范围：进程i使用端口 8000 + i*6 到 8000 + i*6 + 5
+    # 计算端口：进程i使用端口 8000 + i
     PORT_START=$((8000 + i * PORTS_PER_PROCESS))
-    PORT_END=$((PORT_START + PORTS_PER_PROCESS - 1))
     
-    echo "🎬 测试进程 $i: slot $PROC_START_SLOT-$((PROC_END_SLOT - 1)) ($ACTUAL_BLOCKS 区块) -> 端口 $PORT_START-$PORT_END"
+    echo "🎬 测试进程 $i: 预计处理 $BLOCKS_PER_PROCESS 个区块，$CYCLES_PER_PROCESS 个循环 -> 端口 $PORT_START"
     
     {
         PROCESS_START_TIME=$(date +%s)
-        go run ./src/main.go $PROC_START_SLOT $PROC_END_SLOT $BATCH_SIZE $PORT_START
+        
+        # 使用新的参数格式：processId startSlot endSlot cycleSize batchSize portStart processCount
+        go run ./src/main.go $i $START_SLOT $END_SLOT $CYCLE_SIZE $BATCH_SIZE $PORT_START $PROCESS_COUNT
+        
         PROCESS_END_TIME=$(date +%s)
         PROCESS_DURATION=$((PROCESS_END_TIME - PROCESS_START_TIME))
         if [ $PROCESS_DURATION -gt 0 ]; then
-            PROCESS_SPEED=$(echo "scale=2; $ACTUAL_BLOCKS / $PROCESS_DURATION" | bc -l)
+            PROCESS_SPEED=$(echo "scale=2; $BLOCKS_PER_PROCESS / $PROCESS_DURATION" | bc -l)
         else
             PROCESS_SPEED="很快"
         fi
-        echo "✅ 测试进程 $i: $ACTUAL_BLOCKS 区块, ${PROCESS_DURATION}s, $PROCESS_SPEED blocks/s (端口 $PORT_START-$PORT_END)"
+        echo "✅ 测试进程 $i: $BLOCKS_PER_PROCESS 区块, ${PROCESS_DURATION}s, $PROCESS_SPEED blocks/s (端口 $PORT_START)"
     } > test_logs/process_$i.log 2>&1 &
+    
+    # 错开启动时间
+    sleep 1
 done
 
 wait
@@ -72,9 +77,10 @@ else
 fi
 
 echo ""
-echo "🧪 测试完成!"
+echo "🧪 循环测试完成!"
 echo "⏱️  总耗时: ${TOTAL_DURATION}s"
 echo "📈 测试速度: $ACTUAL_SPEED blocks/second"
+echo "📊 区块范围: $START_SLOT - $END_SLOT ($TOTAL_BLOCKS 个区块)"
 
 echo ""
 echo "📋 各进程测试结果:"
@@ -86,5 +92,9 @@ for i in $(seq 0 $((PROCESS_COUNT - 1))); do
 done
 
 echo ""
-echo "✅ 如果测试正常，可以运行大规模任务:"
-echo "   ./run_multiprocess.sh"
+echo "✅ 如果循环测试正常，可以运行大规模任务:"
+echo "   ./run_continuous_multiprocess.sh"
+
+echo ""
+echo "📊 查看详细测试日志:"
+echo "   tail -f test_logs/process_*.log"

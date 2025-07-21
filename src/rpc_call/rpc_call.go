@@ -24,7 +24,7 @@ var globalLoadBalancer = &LoadBalancer{
 // 初始化负载均衡器 - 默认端口范围
 func init() {
 	// 默认初始化为8000-8009（10个端口）
-	setPortsFromStart(8000, 10)
+	setPortsFromStart(8000, 21)
 }
 
 // 设置端口范围（从指定端口开始，使用6个端口）
@@ -88,12 +88,12 @@ func SendMultipleParseDataToDeno(data []model.ParseBlockDataDenoReq) error {
 
 	// 使用负载均衡获取URL
 	url := globalLoadBalancer.getNextURL()
-	body, err := util.PostReq(url, data)
+
+	_, err := util.PostReq(url, data)
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("Request sent to %s\n", url)
-	fmt.Println(string(body))
+	// fmt.Printf("Request sent to %s\n", url)
 	return nil
 }
