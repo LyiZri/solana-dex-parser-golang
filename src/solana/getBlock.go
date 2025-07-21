@@ -276,6 +276,7 @@ func processBatch(slotNums []uint64, apiKey string, client *http.Client) map[uin
 	var batchResponse BatchGetBlockResponse
 	if err := json.Unmarshal(body, &batchResponse); err != nil {
 		fmt.Printf("解析批量响应失败: %v\n", err)
+		fmt.Println("body ", string(body))
 		return make(map[uint64]*model.Block)
 	}
 

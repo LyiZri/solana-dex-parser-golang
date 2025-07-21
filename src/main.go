@@ -30,13 +30,13 @@ func main() {
 	// startSlot := uint64(263922023)
 	startSlot := uint64(247806009)
 
-	endSlot := uint64(347806409)
+	endSlot := uint64(347803510)
 
 	cycleSize := 100
 
 	currentBatchArr := [][]uint64{}
 
-	runtime.GOMAXPROCS(40)
+	runtime.GOMAXPROCS(30)
 
 	for slot := endSlot; slot > startSlot; slot -= uint64(cycleSize) {
 		currentBatch := []uint64{}
@@ -50,10 +50,8 @@ func main() {
 
 	batchSize := 10
 
-	fullBlockData := []model.ParseBlockDataDenoReq{}
-
 	// 工具函数：将二维数组切分为三维数组，每组最多30个batch
-	batchesOf30 := splitToChunks(currentBatchArr, 30)
+	batchesOf30 := splitToChunks(currentBatchArr, 20)
 	for batchIndex, batchGroup := range batchesOf30 { // 外层串行
 		startTime := time.Now()
 		var wg sync.WaitGroup
@@ -63,6 +61,8 @@ func main() {
 				defer wg.Done()
 				fmt.Println("start get block data", batch[0])
 				results := solana.GetMultipleBlocksData(batch, "3ed35a0b-35f6-4adb-8caa-5c72cd36b023", batchSize)
+
+				fullBlockData := []model.ParseBlockDataDenoReq{}
 
 				for _, slot := range batch {
 					block, exists := results[slot]
@@ -89,15 +89,15 @@ func main() {
 					})
 				}
 
-				for _, block := range fullBlockData {
-					wg2 := &sync.WaitGroup{}
-					wg2.Add(1)
-					go func(b model.ParseBlockDataDenoReq) {
-						defer wg2.Done()
-						rpccall.SendMultipleParseDataToDeno([]model.ParseBlockDataDenoReq{b})
-					}(block)
-					wg2.Wait()
-				}
+				// wg2 := &sync.WaitGroup{}
+				// for _, block := range fullBlockData {
+				// 	wg2.Add(1)
+				// 	go func(b model.ParseBlockDataDenoReq) {
+				// 		defer wg2.Done()
+				rpccall.SendMultipleParseDataToDeno(fullBlockData)
+				// 	}(block)
+				// }
+				// wg2.Wait()
 				fmt.Println("get block data done", batch[0])
 			}(currentBatch)
 		}

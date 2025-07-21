@@ -24,7 +24,7 @@ var globalLoadBalancer = &LoadBalancer{
 // 初始化负载均衡器 - 默认端口范围
 func init() {
 	// 默认初始化为8000-8009（10个端口）
-	setPortsFromStart(8000, 21)
+	setPortsFromStart(8000, 30)
 }
 
 // 设置端口范围（从指定端口开始，使用6个端口）
@@ -32,8 +32,8 @@ func SetPortRange(startPort int) {
 	globalLoadBalancer.mutex.Lock()
 	defer globalLoadBalancer.mutex.Unlock()
 
-	setPortsFromStart(startPort, 6) // 每个进程分配6个端口
-	globalLoadBalancer.current = 0  // 重置计数器
+	setPortsFromStart(startPort, 30) // 每个进程分配6个端口
+	globalLoadBalancer.current = 0   // 重置计数器
 
 	fmt.Printf("🌐 端口范围已设置: %d-%d\n", startPort, startPort+5)
 }
