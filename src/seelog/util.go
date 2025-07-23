@@ -4,20 +4,39 @@ import (
 	"fmt"
 	"path/filepath"
 	"runtime"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/petermattis/goid"
-	"github.com/quanhengzhuang/requestid"
 )
+
+// Local request ID implementation to replace the problematic package
+var requestIDStore sync.Map
+
+// setRequestID sets a request ID for the current goroutine
+func setRequestID(id string) {
+	goroutineID := goid.Get()
+	requestIDStore.Store(goroutineID, id)
+}
+
+// getRequestID gets the request ID for the current goroutine
+func getRequestID() interface{} {
+	goroutineID := goid.Get()
+	if id, exists := requestIDStore.Load(goroutineID); exists {
+		return id
+	}
+	return nil
+}
 
 func getPrefix(level string) string {
 	callerInfo := getCallerName()
-	requestID := requestid.Get()
+	requestID := getRequestID()
 	if requestID == nil {
 		requestIDStr := fmt.Sprintf("%+v", uuid.New())
-		requestid.Set(requestIDStr)
+		setRequestID(requestIDStr)
+		requestID = requestIDStr
 	}
-	prefix := fmt.Sprintf("%v %s [%d] %s: ", requestid.Get(), level, goid.Get(), callerInfo)
+	prefix := fmt.Sprintf("%v %s [%d] %s: ", requestID, level, goid.Get(), callerInfo)
 	return prefix
 }
 
