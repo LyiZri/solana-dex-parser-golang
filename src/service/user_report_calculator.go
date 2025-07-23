@@ -100,7 +100,8 @@ func (calc *UserReportCalculator) calculateBasicMetrics(userReport *mysql.UserRe
 	firstTx := transactions[0]
 	userReport.FirstTx = int64(firstTx.TransactionTime)
 	userReport.FirstTokenAddr = firstTx.TokenAddress
-	userReport.FirstTokenAmount = decimal.NewFromFloat(firstTx.TokenAmount)
+	userReport.FirstTokenAmount = decimal.NewFromFloat(firstTx.TokenAmount).Round(6)
+	userReport.FirstSolAmount = decimal.NewFromFloat(firstTx.QuoteAmount).Round(6)
 
 	var totalBuyVolume, totalSellVolume float64
 	var buyCount, sellCount int64
@@ -134,9 +135,9 @@ func (calc *UserReportCalculator) calculateBasicMetrics(userReport *mysql.UserRe
 		uniqueTokens[tx.TokenAddress] = true
 	}
 
-	userReport.TxAmountUsd = decimal.NewFromFloat(totalBuyVolume + totalSellVolume)
-	userReport.TxBuyAmountUsd = decimal.NewFromFloat(totalBuyVolume)
-	userReport.TxSellAmountUsd = decimal.NewFromFloat(totalSellVolume)
+	userReport.TxAmountUsd = decimal.NewFromFloat(totalBuyVolume + totalSellVolume).Round(6)
+	userReport.TxBuyAmountUsd = decimal.NewFromFloat(totalBuyVolume).Round(6)
+	userReport.TxSellAmountUsd = decimal.NewFromFloat(totalSellVolume).Round(6)
 	userReport.TxCount = buyCount + sellCount
 	userReport.TxBuyCount = buyCount
 	userReport.TxSellCount = sellCount
@@ -325,7 +326,7 @@ func (calc *UserReportCalculator) calculatePnLMetrics(userReport *mysql.UserRepo
 	// 计算胜率
 	if userReport.TokenCount > 0 {
 		winRate := float64(pnlWinCount) / float64(userReport.TokenCount)
-		userReport.WinRate = decimal.NewFromFloat(winRate)
+		userReport.WinRate = decimal.NewFromFloat(winRate).Round(6)
 	}
 
 	userReport.MostEarnTokenAddr = topProfitToken
@@ -336,7 +337,7 @@ func (calc *UserReportCalculator) calculatePnLMetrics(userReport *mysql.UserRepo
 	if topProfitPnL > 0 {
 		// 将SOL本位的盈利转换为USD金额
 		// 这里假设盈利已经是USD金额，如果是SOL本位需要转换
-		userReport.MostEarnTokenAmountUsd = decimal.NewFromFloat(topProfitPnL)
+		userReport.MostEarnTokenAmountUsd = decimal.NewFromFloat(topProfitPnL).Round(6)
 	} else {
 		userReport.MostEarnTokenAmountUsd = decimal.NewFromFloat(0)
 	}
@@ -344,7 +345,7 @@ func (calc *UserReportCalculator) calculatePnLMetrics(userReport *mysql.UserRepo
 	// 2. TopLossUsdAmount - 最多损失的代币损失金额（USD）
 	if topLossPnL < 0 {
 		// 取绝对值，转换为正数表示损失金额
-		userReport.MostLossTokenAmountUsd = decimal.NewFromFloat(math.Abs(topLossPnL))
+		userReport.MostLossTokenAmountUsd = decimal.NewFromFloat(math.Abs(topLossPnL)).Round(4)
 	} else {
 		userReport.MostLossTokenAmountUsd = decimal.NewFromFloat(0)
 	}
@@ -354,7 +355,16 @@ func (calc *UserReportCalculator) calculatePnLMetrics(userReport *mysql.UserRepo
 		// 计算盈利倍数：盈利金额 / 投入成本
 		profitMultiplier := topProfitPnL / topProfitTokenData.TotalBuyValue
 		// 例如：投入100，盈利200，倍数为2（翻了2倍）
-		userReport.MostEarnTokenWinRate = decimal.NewFromFloat(profitMultiplier)
+
+		// 临时解决方案：限制最大值以适应当前MySQL字段 DECIMAL(10,2) 的限制
+		// TODO: 将MySQL字段改为 DECIMAL(10,4) 后可以移除此限制
+		const MAX_WIN_RATE = 99999999.99 // MySQL DECIMAL(10,2) 的最大值
+		if profitMultiplier > MAX_WIN_RATE {
+			profitMultiplier = MAX_WIN_RATE
+		}
+
+		// 限制精度为4位小数，避免MySQL DECIMAL字段溢出
+		userReport.MostEarnTokenWinRate = decimal.NewFromFloat(profitMultiplier).Round(2)
 	} else {
 		userReport.MostEarnTokenWinRate = decimal.NewFromFloat(0)
 	}
@@ -388,8 +398,8 @@ func (calc *UserReportCalculator) calculatePortfolioMetrics(userReport *mysql.Us
 	}
 
 	userReport.MostHoldTokenAddr = mostHoldValueToken
-	userReport.MostHoldTokenAmountUsd = decimal.NewFromFloat(mostHoldValueUSD)
-	userReport.MostWalletHoldUsd = decimal.NewFromFloat(maxTotalHoldValue)
+	userReport.MostHoldTokenAmountUsd = decimal.NewFromFloat(mostHoldValueUSD).Round(6)
+	userReport.MostWalletHoldUsd = decimal.NewFromFloat(maxTotalHoldValue).Round(6)
 
 	// 计算用户整体盈亏率
 	var totalInvestment, totalCurrentValue, totalProfit float64
@@ -408,6 +418,7 @@ func (calc *UserReportCalculator) calculatePortfolioMetrics(userReport *mysql.Us
 
 	if totalInvestment > 0 {
 		profitRate := (totalCurrentValue - totalInvestment + totalProfit) / totalInvestment
-		userReport.WinRate = decimal.NewFromFloat(profitRate)
+		userReport.TotalPnlUsd = decimal.NewFromFloat(profitRate).Round(6)
 	}
+
 }
