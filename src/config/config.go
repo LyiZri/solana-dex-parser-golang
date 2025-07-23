@@ -10,10 +10,11 @@ import (
 var SvcConfig = &Config{}
 
 type Config struct {
-	Db         DatabaseConfig   `yaml:"db"`
+	DB         DatabaseConfig   `yaml:"db"`
 	ClickHouse ClickHouseConfig `yaml:"clickhouse"`
 	Solana     SolanaConfig     `yaml:"solana"`
 	RpcCall    RpcCallConfig    `yaml:"rpc_call"`
+	Env        string           `yaml:"env"`
 }
 
 type DatabaseConfig struct {
@@ -43,6 +44,23 @@ type RpcCallConfig struct {
 func LoadSvcConfig() error {
 	cf, err := os.Open("./config-yaml/config.yaml")
 	if err != nil {
+		fmt.Println("failed to open config file", err)
+		os.Exit(1)
+	}
+
+	decoderCf := yaml.NewDecoder(cf)
+	if err = decoderCf.Decode(&SvcConfig); err != nil {
+		return err
+	}
+
+	fmt.Printf("svcConfig: %+v\n", SvcConfig)
+	return nil
+}
+
+func LoadSvcConfigFromPath() error {
+	cf, err := os.Open("/Users/a11111/Desktop/code/golang/smartx/solana-dex-parser-golang/config-yaml/config.yaml")
+	if err != nil {
+		fmt.Println("failed to open config file", err)
 		os.Exit(1)
 	}
 

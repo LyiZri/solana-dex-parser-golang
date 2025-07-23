@@ -2,9 +2,11 @@ package clickhouse
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 
 	ckdriver "github.com/ClickHouse/clickhouse-go/v2/lib/driver"
+	"github.com/go-solana-parse/src/config"
 )
 
 type SolanaHistoryData struct {
@@ -45,31 +47,30 @@ func (s *SolanaHistoryData) TableNameWithNamespace() string {
 
 func (s *SolanaHistoryData) GetTotalTxCount(db ckdriver.Conn) (uint64, error) {
 	var count uint64
-	err := db.QueryRow(context.Background(), "SELECT COUNT(*) FROM solana_history_data_new").Scan(&count)
+	query := "SELECT COUNT(*) FROM " + s.TableName()
+	err := db.QueryRow(context.Background(), query).Scan(&count)
 	return count, err
 }
 
 func (s *SolanaHistoryData) GetTotalUniqueAddress(db ckdriver.Conn) ([]string, error) {
-	var addressList []string
-	rows, err := db.Query(context.Background(), "SELECT DISTINCT wallet_address FROM solana_history_data_new")
+	query := "SELECT DISTINCT wallet_address FROM " + s.TableName()
+	rows, err := db.Query(context.Background(), query)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
+	var addresses []string
 	for rows.Next() {
 		var address string
-		if err := rows.Scan(&address); err != nil {
+		err := rows.Scan(&address)
+		if err != nil {
 			return nil, err
 		}
-		addressList = append(addressList, address)
+		addresses = append(addresses, address)
 	}
 
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	return addressList, nil
+	return addresses, nil
 }
 
 func (s *SolanaHistoryData) GetTotalUniqueAddressLength(db ckdriver.Conn) (int, error) {
@@ -77,18 +78,18 @@ func (s *SolanaHistoryData) GetTotalUniqueAddressLength(db ckdriver.Conn) (int, 
 	if err != nil {
 		return 0, err
 	}
+
 	return len(addressList), nil
 }
 
-// GetUserTransactionsByAddress 根据用户地址获取交易记录
 func (s *SolanaHistoryData) GetUserTransactionsByAddress(db ckdriver.Conn, address string) ([]*SolanaHistoryData, error) {
 	query := `
 		SELECT tx_hash, trade_type, pool_address, block_height, transaction_time,
 			   wallet_address, token_amount, token_symbol, token_address,
 			   quote_symbol, quote_amount, quote_address, toString(quote_price),
 			   toString(usd_price), toString(usd_amount)
-		FROM solana_history_data_new 
-		WHERE wallet_address = ? 
+		FROM ` + s.TableName() + `
+		WHERE wallet_address = ?
 		ORDER BY transaction_time ASC
 	`
 
@@ -102,7 +103,7 @@ func (s *SolanaHistoryData) GetUserTransactionsByAddress(db ckdriver.Conn, addre
 	for rows.Next() {
 		tx := &SolanaHistoryData{}
 		var quotePriceStr, usdPriceStr, usdAmountStr string
-		
+
 		err := rows.Scan(
 			&tx.TxHash, &tx.TradeType, &tx.PoolAddress, &tx.BlockHeight,
 			&tx.TransactionTime, &tx.WalletAddress, &tx.TokenAmount,
@@ -113,7 +114,7 @@ func (s *SolanaHistoryData) GetUserTransactionsByAddress(db ckdriver.Conn, addre
 		if err != nil {
 			return nil, err
 		}
-		
+
 		// 转换Decimal字段
 		if tx.QuotePrice, err = parseDecimalToFloat64(quotePriceStr); err != nil {
 			return nil, err
@@ -124,24 +125,22 @@ func (s *SolanaHistoryData) GetUserTransactionsByAddress(db ckdriver.Conn, addre
 		if tx.UsdAmount, err = parseDecimalToFloat64(usdAmountStr); err != nil {
 			return nil, err
 		}
-		
+
 		transactions = append(transactions, tx)
 	}
 
-	return transactions, rows.Err()
+	return transactions, nil
 }
 
-// GetUserTransactionsByAddressAndTimeRange 根据用户地址和时间范围获取交易记录
 func (s *SolanaHistoryData) GetUserTransactionsByAddressAndTimeRange(db ckdriver.Conn, address string, startTime, endTime uint64) ([]*SolanaHistoryData, error) {
 	query := `
 		SELECT tx_hash, trade_type, pool_address, block_height, transaction_time,
 			   wallet_address, token_amount, token_symbol, token_address,
-			   quote_symbol, quote_amount, quote_address, quote_price,
-			   usd_price, usd_amount
-		FROM solana_history_data_new 
-		WHERE wallet_address = ? 
-		  AND transaction_time >= ? 
-		  AND transaction_time <= ?
+			   quote_symbol, quote_amount, quote_address, toString(quote_price),
+			   toString(usd_price), toString(usd_amount)
+		FROM ` + s.TableName() + `
+		WHERE wallet_address = ?
+		  AND transaction_time BETWEEN ? AND ?
 		ORDER BY transaction_time ASC
 	`
 
@@ -154,31 +153,44 @@ func (s *SolanaHistoryData) GetUserTransactionsByAddressAndTimeRange(db ckdriver
 	var transactions []*SolanaHistoryData
 	for rows.Next() {
 		tx := &SolanaHistoryData{}
+		var quotePriceStr, usdPriceStr, usdAmountStr string
+
 		err := rows.Scan(
 			&tx.TxHash, &tx.TradeType, &tx.PoolAddress, &tx.BlockHeight,
 			&tx.TransactionTime, &tx.WalletAddress, &tx.TokenAmount,
 			&tx.TokenSymbol, &tx.TokenAddress, &tx.QuoteSymbol,
-			&tx.QuoteAmount, &tx.QuoteAddress, &tx.QuotePrice,
-			&tx.UsdPrice, &tx.UsdAmount,
+			&tx.QuoteAmount, &tx.QuoteAddress, &quotePriceStr,
+			&usdPriceStr, &usdAmountStr,
 		)
 		if err != nil {
 			return nil, err
 		}
+
+		// 转换Decimal字段
+		if tx.QuotePrice, err = parseDecimalToFloat64(quotePriceStr); err != nil {
+			return nil, err
+		}
+		if tx.UsdPrice, err = parseDecimalToFloat64(usdPriceStr); err != nil {
+			return nil, err
+		}
+		if tx.UsdAmount, err = parseDecimalToFloat64(usdAmountStr); err != nil {
+			return nil, err
+		}
+
 		transactions = append(transactions, tx)
 	}
 
-	return transactions, rows.Err()
+	return transactions, nil
 }
 
-// GetTokenTransactionsByAddressAndToken 根据用户地址和代币地址获取特定代币的交易记录
 func (s *SolanaHistoryData) GetTokenTransactionsByAddressAndToken(db ckdriver.Conn, walletAddress, tokenAddress string) ([]*SolanaHistoryData, error) {
 	query := `
 		SELECT tx_hash, trade_type, pool_address, block_height, transaction_time,
 			   wallet_address, token_amount, token_symbol, token_address,
-			   quote_symbol, quote_amount, quote_address, quote_price,
-			   usd_price, usd_amount
-		FROM solana_history_data_new 
-		WHERE wallet_address = ? 
+			   quote_symbol, quote_amount, quote_address, toString(quote_price),
+			   toString(usd_price), toString(usd_amount)
+		FROM ` + s.TableName() + `
+		WHERE wallet_address = ?
 		  AND token_address = ?
 		ORDER BY transaction_time ASC
 	`
@@ -192,29 +204,41 @@ func (s *SolanaHistoryData) GetTokenTransactionsByAddressAndToken(db ckdriver.Co
 	var transactions []*SolanaHistoryData
 	for rows.Next() {
 		tx := &SolanaHistoryData{}
+		var quotePriceStr, usdPriceStr, usdAmountStr string
+
 		err := rows.Scan(
 			&tx.TxHash, &tx.TradeType, &tx.PoolAddress, &tx.BlockHeight,
 			&tx.TransactionTime, &tx.WalletAddress, &tx.TokenAmount,
 			&tx.TokenSymbol, &tx.TokenAddress, &tx.QuoteSymbol,
-			&tx.QuoteAmount, &tx.QuoteAddress, &tx.QuotePrice,
-			&tx.UsdPrice, &tx.UsdAmount,
+			&tx.QuoteAmount, &tx.QuoteAddress, &quotePriceStr,
+			&usdPriceStr, &usdAmountStr,
 		)
 		if err != nil {
 			return nil, err
 		}
+
+		// 转换Decimal字段
+		if tx.QuotePrice, err = parseDecimalToFloat64(quotePriceStr); err != nil {
+			return nil, err
+		}
+		if tx.UsdPrice, err = parseDecimalToFloat64(usdPriceStr); err != nil {
+			return nil, err
+		}
+		if tx.UsdAmount, err = parseDecimalToFloat64(usdAmountStr); err != nil {
+			return nil, err
+		}
+
 		transactions = append(transactions, tx)
 	}
 
-	return transactions, rows.Err()
+	return transactions, nil
 }
 
-// GetUniqueTokensByAddress 获取用户交易过的所有唯一代币地址
 func (s *SolanaHistoryData) GetUniqueTokensByAddress(db ckdriver.Conn, address string) ([]string, error) {
 	query := `
-		SELECT DISTINCT token_address 
-		FROM solana_history_data_new 
+		SELECT DISTINCT token_address
+		FROM ` + s.TableName() + `
 		WHERE wallet_address = ?
-		ORDER BY token_address
 	`
 
 	rows, err := db.Query(context.Background(), query, address)
@@ -223,27 +247,27 @@ func (s *SolanaHistoryData) GetUniqueTokensByAddress(db ckdriver.Conn, address s
 	}
 	defer rows.Close()
 
-	var tokenAddresses []string
+	var tokens []string
 	for rows.Next() {
-		var tokenAddress string
-		if err := rows.Scan(&tokenAddress); err != nil {
+		var token string
+		err := rows.Scan(&token)
+		if err != nil {
 			return nil, err
 		}
-		tokenAddresses = append(tokenAddresses, tokenAddress)
+		tokens = append(tokens, token)
 	}
 
-	return tokenAddresses, rows.Err()
+	return tokens, nil
 }
 
-// GetUserFirstTransaction 获取用户的第一笔交易记录
 func (s *SolanaHistoryData) GetUserFirstTransaction(db ckdriver.Conn, address string) (*SolanaHistoryData, error) {
 	query := `
 		SELECT tx_hash, trade_type, pool_address, block_height, transaction_time,
 			   wallet_address, token_amount, token_symbol, token_address,
-			   quote_symbol, quote_amount, quote_address, quote_price,
-			   usd_price, usd_amount
-		FROM solana_history_data_new 
-		WHERE wallet_address = ? 
+			   quote_symbol, quote_amount, quote_address, toString(quote_price),
+			   toString(usd_price), toString(usd_amount)
+		FROM ` + s.TableName() + `
+		WHERE wallet_address = ?
 		ORDER BY transaction_time ASC
 		LIMIT 1
 	`
@@ -251,30 +275,42 @@ func (s *SolanaHistoryData) GetUserFirstTransaction(db ckdriver.Conn, address st
 	row := db.QueryRow(context.Background(), query, address)
 
 	tx := &SolanaHistoryData{}
+	var quotePriceStr, usdPriceStr, usdAmountStr string
+
 	err := row.Scan(
 		&tx.TxHash, &tx.TradeType, &tx.PoolAddress, &tx.BlockHeight,
 		&tx.TransactionTime, &tx.WalletAddress, &tx.TokenAmount,
 		&tx.TokenSymbol, &tx.TokenAddress, &tx.QuoteSymbol,
-		&tx.QuoteAmount, &tx.QuoteAddress, &tx.QuotePrice,
-		&tx.UsdPrice, &tx.UsdAmount,
+		&tx.QuoteAmount, &tx.QuoteAddress, &quotePriceStr,
+		&usdPriceStr, &usdAmountStr,
 	)
 
 	if err != nil {
 		return nil, err
 	}
 
+	// 转换Decimal字段
+	if tx.QuotePrice, err = parseDecimalToFloat64(quotePriceStr); err != nil {
+		return nil, err
+	}
+	if tx.UsdPrice, err = parseDecimalToFloat64(usdPriceStr); err != nil {
+		return nil, err
+	}
+	if tx.UsdAmount, err = parseDecimalToFloat64(usdAmountStr); err != nil {
+		return nil, err
+	}
+
 	return tx, nil
 }
 
-// GetTokenPriceAtBlock 获取某个代币在指定区块高度的价格信息
 // 通过查找在该区块高度之前的最后一笔交易来推导价格
 func (s *SolanaHistoryData) GetTokenPriceAtBlock(db ckdriver.Conn, tokenAddress string, blockHeight uint64) (*SolanaHistoryData, error) {
 	query := `
 		SELECT tx_hash, trade_type, pool_address, block_height, transaction_time,
 			   wallet_address, token_amount, token_symbol, token_address,
-			   quote_symbol, quote_amount, quote_address, quote_price,
-			   usd_price, usd_amount
-		FROM solana_history_data_new 
+			   quote_symbol, quote_amount, quote_address, toString(quote_price),
+			   toString(usd_price), toString(usd_amount)
+		FROM ` + s.TableName() + `
 		WHERE token_address = ? 
 		  AND block_height <= ?
 		ORDER BY block_height DESC, transaction_time DESC
@@ -284,17 +320,135 @@ func (s *SolanaHistoryData) GetTokenPriceAtBlock(db ckdriver.Conn, tokenAddress 
 	row := db.QueryRow(context.Background(), query, tokenAddress, blockHeight)
 
 	tx := &SolanaHistoryData{}
+	var quotePriceStr, usdPriceStr, usdAmountStr string
+
 	err := row.Scan(
 		&tx.TxHash, &tx.TradeType, &tx.PoolAddress, &tx.BlockHeight,
 		&tx.TransactionTime, &tx.WalletAddress, &tx.TokenAmount,
 		&tx.TokenSymbol, &tx.TokenAddress, &tx.QuoteSymbol,
-		&tx.QuoteAmount, &tx.QuoteAddress, &tx.QuotePrice,
-		&tx.UsdPrice, &tx.UsdAmount,
+		&tx.QuoteAmount, &tx.QuoteAddress, &quotePriceStr,
+		&usdPriceStr, &usdAmountStr,
 	)
 
 	if err != nil {
 		return nil, err
 	}
 
+	// 转换Decimal字段
+	if tx.QuotePrice, err = parseDecimalToFloat64(quotePriceStr); err != nil {
+		return nil, err
+	}
+	if tx.UsdPrice, err = parseDecimalToFloat64(usdPriceStr); err != nil {
+		return nil, err
+	}
+	if tx.UsdAmount, err = parseDecimalToFloat64(usdAmountStr); err != nil {
+		return nil, err
+	}
+
 	return tx, nil
+}
+
+// ===== SOL价格相关方法 =====
+
+// GetSOLPriceFromTransactions 从交易数据中查询SOL价格
+func (s *SolanaHistoryData) GetSOLPriceFromTransactions(db ckdriver.Conn, blockHeight uint64) (float64, error) {
+	query := `
+		SELECT quote_amount, token_amount, toString(usd_price)
+		FROM ` + s.TableName() + `
+		WHERE (quote_address = ? OR token_address = ?)
+		  AND (token_address = ? OR quote_address = ?)
+		  AND block_height <= ?
+		  AND trade_type IS NOT NULL
+		ORDER BY block_height DESC, transaction_time DESC
+		LIMIT 1
+	`
+
+	wsolAddress := config.WSOL_ADDRESS
+	usdcAddress := config.USDC_ADDRESS
+
+	row := db.QueryRow(context.Background(), query,
+		wsolAddress, wsolAddress, usdcAddress, usdcAddress, blockHeight)
+
+	var quoteAmount, tokenAmount float64
+	var usdPriceStr string
+	err := row.Scan(&quoteAmount, &tokenAmount, &usdPriceStr)
+	if err != nil {
+		return 0.0, fmt.Errorf("未找到SOL-USDC交易记录: %v", err)
+	}
+
+	if tokenAmount > 0 {
+		return tokenAmount / quoteAmount, nil
+	}
+
+	return 0.0, fmt.Errorf("无效的交易数据")
+}
+
+// GetSOLTransactionsInRange 获取指定区块范围内的SOL-USDC交易数据
+func (s *SolanaHistoryData) GetSOLTransactionsInRange(db ckdriver.Conn, startBlock, endBlock uint64) ([]SOLTransactionData, error) {
+	query := `
+		SELECT DISTINCT block_height, quote_amount, token_amount, toString(usd_price)
+		FROM ` + s.TableName() + `
+		WHERE (quote_address = ? OR token_address = ?)
+		  AND (token_address = ? OR quote_address = ?)
+		  AND block_height BETWEEN ? AND ?
+		  AND trade_type IS NOT NULL
+		ORDER BY block_height ASC
+	`
+
+	wsolAddress := config.WSOL_ADDRESS
+	usdcAddress := config.USDC_ADDRESS
+
+	rows, err := db.Query(context.Background(), query,
+		wsolAddress, wsolAddress, usdcAddress, usdcAddress, startBlock, endBlock)
+	if err != nil {
+		return nil, fmt.Errorf("查询SOL-USDC交易失败: %v", err)
+	}
+	defer rows.Close()
+
+	var transactions []SOLTransactionData
+	for rows.Next() {
+		var tx SOLTransactionData
+		var usdPriceStr string
+
+		err := rows.Scan(&tx.BlockHeight, &tx.QuoteAmount, &tx.TokenAmount, &usdPriceStr)
+		if err != nil {
+			continue
+		}
+
+		// 转换Decimal字段
+		tx.UsdPrice, err = parseDecimalToFloat64(usdPriceStr)
+		if err != nil {
+			// 如果转换失败，设为0继续处理
+			tx.UsdPrice = 0
+		}
+
+		transactions = append(transactions, tx)
+	}
+
+	return transactions, nil
+}
+
+// ===== 数据结构定义 =====
+
+// SOLTransactionData SOL交易数据结构
+type SOLTransactionData struct {
+	BlockHeight uint64  `json:"block_height"`
+	QuoteAmount float64 `json:"quote_amount"`
+	TokenAmount float64 `json:"token_amount"`
+	UsdPrice    float64 `json:"usd_price"`
+}
+
+// CalculateSOLPriceFromTransaction 从交易数据计算SOL价格
+func (tx *SOLTransactionData) CalculateSOLPriceFromTransaction() (float64, error) {
+	// 如果有直接的USD价格，使用它
+	if tx.UsdPrice > 0 {
+		return tx.UsdPrice, nil
+	}
+
+	// 否则根据交易比例计算（USDC视为1美元）
+	if tx.TokenAmount > 0 {
+		return tx.QuoteAmount / tx.TokenAmount, nil
+	}
+
+	return 0.0, fmt.Errorf("无效的交易数据")
 }
