@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"math"
 	"sort"
-	"time"
 
 	"github.com/go-solana-parse/src/config"
 	"github.com/go-solana-parse/src/db"
 	"github.com/go-solana-parse/src/db/clickhouse"
 	"github.com/go-solana-parse/src/db/mysql"
 	"github.com/go-solana-parse/src/model"
+	"github.com/shopspring/decimal"
 )
 
 const (
@@ -52,7 +52,7 @@ func (calc *UserReportCalculator) CalculateUserReport(address string) (*mysql.Us
 
 	// 初始化用户报告
 	userReport := &mysql.UserReport{
-		Address: address,
+		UserAddr: address,
 	}
 
 	// 计算基础指标
@@ -98,9 +98,9 @@ func (calc *UserReportCalculator) calculateBasicMetrics(userReport *mysql.UserRe
 
 	// 第一笔交易信息
 	firstTx := transactions[0]
-	userReport.FirstTradeTime = time.Unix(int64(firstTx.TransactionTime), 0).Format("2006-01-02 15:04:05")
-	userReport.FirstTradeTokenAddress = firstTx.TokenAddress
-	userReport.FirstTradeTokenAmount = fmt.Sprintf("%.6f", firstTx.TokenAmount)
+	userReport.FirstTx = int64(firstTx.TransactionTime)
+	userReport.FirstTokenAddr = firstTx.TokenAddress
+	userReport.FirstTokenAmount = decimal.NewFromFloat(firstTx.TokenAmount)
 
 	var totalBuyVolume, totalSellVolume float64
 	var buyCount, sellCount int64
@@ -134,13 +134,13 @@ func (calc *UserReportCalculator) calculateBasicMetrics(userReport *mysql.UserRe
 		uniqueTokens[tx.TokenAddress] = true
 	}
 
-	userReport.TotalBuyVolumn = fmt.Sprintf("%.6f", totalBuyVolume)
-	userReport.TotalSellVolumn = fmt.Sprintf("%.6f", totalSellVolume)
-	userReport.TotalVolumn = fmt.Sprintf("%.6f", totalBuyVolume+totalSellVolume)
-	userReport.BuyCount = buyCount
-	userReport.SellCount = sellCount
-	userReport.TradeCount = buyCount + sellCount
-	userReport.UniqueTokenCount = int64(len(uniqueTokens))
+	userReport.TxAmountUsd = decimal.NewFromFloat(totalBuyVolume + totalSellVolume)
+	userReport.TxBuyAmountUsd = decimal.NewFromFloat(totalBuyVolume)
+	userReport.TxSellAmountUsd = decimal.NewFromFloat(totalSellVolume)
+	userReport.TxCount = buyCount + sellCount
+	userReport.TxBuyCount = buyCount
+	userReport.TxSellCount = sellCount
+	userReport.TokenCount = int64(len(uniqueTokens))
 }
 
 // calculateTokenPnL 计算每个代币的盈亏数据
@@ -319,34 +319,34 @@ func (calc *UserReportCalculator) calculatePnLMetrics(userReport *mysql.UserRepo
 	}
 
 	// 设置用户报告字段
-	userReport.PnlWinCount = pnlWinCount
-	userReport.PnlLossCount = pnlLossCount
+	userReport.TokenWinCount = pnlWinCount
+	userReport.TokenLossCount = pnlLossCount
 
 	// 计算胜率
-	if userReport.UniqueTokenCount > 0 {
-		winRate := float64(pnlWinCount) / float64(userReport.UniqueTokenCount)
-		userReport.PnlWinRate = fmt.Sprintf("%.4f", winRate)
+	if userReport.TokenCount > 0 {
+		winRate := float64(pnlWinCount) / float64(userReport.TokenCount)
+		userReport.WinRate = decimal.NewFromFloat(winRate)
 	}
 
-	userReport.TopProfitTokenAddress = topProfitToken
-	userReport.TopLossTokenAddress = topLossToken
+	userReport.MostEarnTokenAddr = topProfitToken
+	userReport.MostLossTokenAddr = topLossToken
 
 	// 计算新增的三个字段
 	// 1. TopProfitUsdAmount - 最多盈利的代币盈利金额（USD）
 	if topProfitPnL > 0 {
 		// 将SOL本位的盈利转换为USD金额
 		// 这里假设盈利已经是USD金额，如果是SOL本位需要转换
-		userReport.TopProfitUsdAmount = fmt.Sprintf("%.6f", topProfitPnL)
+		userReport.MostEarnTokenAmountUsd = decimal.NewFromFloat(topProfitPnL)
 	} else {
-		userReport.TopProfitUsdAmount = "0.000000"
+		userReport.MostEarnTokenAmountUsd = decimal.NewFromFloat(0)
 	}
 
 	// 2. TopLossUsdAmount - 最多损失的代币损失金额（USD）
 	if topLossPnL < 0 {
 		// 取绝对值，转换为正数表示损失金额
-		userReport.TopLossUsdAmount = fmt.Sprintf("%.6f", math.Abs(topLossPnL))
+		userReport.MostLossTokenAmountUsd = decimal.NewFromFloat(math.Abs(topLossPnL))
 	} else {
-		userReport.TopLossUsdAmount = "0.000000"
+		userReport.MostLossTokenAmountUsd = decimal.NewFromFloat(0)
 	}
 
 	// 3. TopProfitWinRate - 最多盈利的代币的胜率/翻了多少倍
@@ -354,44 +354,42 @@ func (calc *UserReportCalculator) calculatePnLMetrics(userReport *mysql.UserRepo
 		// 计算盈利倍数：盈利金额 / 投入成本
 		profitMultiplier := topProfitPnL / topProfitTokenData.TotalBuyValue
 		// 例如：投入100，盈利200，倍数为2（翻了2倍）
-		userReport.TopProfitWinRate = fmt.Sprintf("%.4f", profitMultiplier)
+		userReport.MostEarnTokenWinRate = decimal.NewFromFloat(profitMultiplier)
 	} else {
-		userReport.TopProfitWinRate = "0.0000"
+		userReport.MostEarnTokenWinRate = decimal.NewFromFloat(0)
 	}
 
 	// 盈利分布
-	userReport.WinLevelOneCount = winLevel1
-	userReport.WinLevelTwoCount = winLevel2
-	userReport.WinLevelThreeCount = winLevel3
-	userReport.WinLevelFourCount = winLevel4
+	userReport.MetricE0E200 = winLevel1
+	userReport.MetricE200E500 = winLevel2
+	userReport.MetricE500E1000 = winLevel3
+	userReport.MetricE1000 = winLevel4
 
 	// 亏损分布
-	userReport.LossLevelOneCount = lossLevel1
-	userReport.LossLevelTwoCount = lossLevel2
+	userReport.MetricL50L0 = lossLevel1
+	userReport.MetricL50 = lossLevel2
 }
 
 // calculatePortfolioMetrics 计算投资组合指标
 func (calc *UserReportCalculator) calculatePortfolioMetrics(userReport *mysql.UserReport, tokenPnLMap map[string]*model.TokenPnLData) {
 	var maxTotalHoldValue float64
 	var mostHoldValueToken string
-	var mostHoldValueAmount, mostHoldValueUSD float64
+	var mostHoldValueUSD float64
 
 	for tokenAddr, tokenData := range tokenPnLMap {
 		// 寻找历史最高持仓价值的代币
 		if tokenData.MaxHoldingValue > mostHoldValueUSD {
 			mostHoldValueUSD = tokenData.MaxHoldingValue
 			mostHoldValueToken = tokenAddr
-			mostHoldValueAmount = tokenData.MaxHoldingAmount
 		}
 
 		// 累计历史最高总持仓价值
 		maxTotalHoldValue += tokenData.MaxHoldingValue
 	}
 
-	userReport.MostHoldValueTokenAddress = mostHoldValueToken
-	userReport.MostHoldValueTokenAmount = fmt.Sprintf("%.6f", mostHoldValueAmount)
-	userReport.MostHoldValueTokenUSD = fmt.Sprintf("%.6f", mostHoldValueUSD)
-	userReport.MaxTotalHoldValue = fmt.Sprintf("%.6f", maxTotalHoldValue)
+	userReport.MostHoldTokenAddr = mostHoldValueToken
+	userReport.MostHoldTokenAmountUsd = decimal.NewFromFloat(mostHoldValueUSD)
+	userReport.MostWalletHoldUsd = decimal.NewFromFloat(maxTotalHoldValue)
 
 	// 计算用户整体盈亏率
 	var totalInvestment, totalCurrentValue, totalProfit float64
@@ -410,6 +408,6 @@ func (calc *UserReportCalculator) calculatePortfolioMetrics(userReport *mysql.Us
 
 	if totalInvestment > 0 {
 		profitRate := (totalCurrentValue - totalInvestment + totalProfit) / totalInvestment
-		userReport.ProfitRate = fmt.Sprintf("%.6f", profitRate)
+		userReport.WinRate = decimal.NewFromFloat(profitRate)
 	}
 }
