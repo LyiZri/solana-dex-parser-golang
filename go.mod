@@ -11,7 +11,6 @@ require (
 	github.com/cihub/seelog v0.0.0-20170130134532-f561c5e57575
 	github.com/google/uuid v1.6.0
 	github.com/petermattis/goid v0.0.0-20250508124226-395b08cebbdb
-	github.com/quanhengzhuang/requestid v0.0.0-20190720153344-7be9b19732d9
 	golang.org/x/time v0.12.0
 	gorm.io/driver/mysql v1.6.0
 	gorm.io/gorm v1.30.0
