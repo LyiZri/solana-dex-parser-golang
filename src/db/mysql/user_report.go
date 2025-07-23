@@ -90,7 +90,7 @@ type UserReport struct {
 
 // TableName 返回表名
 func (u *UserReport) TableName() string {
-	return "user_report"
+	return "smart_season_1"
 }
 
 var UserReportNsp = &UserReport{}
