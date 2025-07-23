@@ -26,6 +26,9 @@ type UserReport struct {
 	PnlWinRate                string `json:"pnl_win_rate" gorm:"column:pnl_win_rate"`
 	TopProfitTokenAddress     string `json:"top_profit_token_address" gorm:"column:top_profit_token_address"`
 	TopLossTokenAddress       string `json:"top_loss_token_address" gorm:"column:top_loss_token_address"`
+	TopProfitUsdAmount        string `json:"top_profit_usd_amount" gorm:"column:top_profit_usd_amount"`
+	TopLossUsdAmount          string `json:"top_loss_usd_amount" gorm:"column:top_loss_usd_amount"`
+	TopProfitWinRate          string `json:"top_profit_win_rate" gorm:"column:top_profit_win_rate"`
 	WinLevelOneCount          int64  `json:"win_level_one_count" gorm:"column:win_level_one_count"`
 	WinLevelTwoCount          int64  `json:"win_level_two_count" gorm:"column:win_level_two_count"`
 	WinLevelThreeCount        int64  `json:"win_level_three_count" gorm:"column:win_level_three_count"`

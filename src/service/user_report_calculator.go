@@ -247,6 +247,7 @@ func (calc *UserReportCalculator) calculatePnLMetrics(userReport *mysql.UserRepo
 	var pnlWinCount, pnlLossCount int64
 	var topProfitPnL, topLossPnL float64
 	var topProfitToken, topLossToken string
+	var topProfitTokenData *model.TokenPnLData // 保存最盈利代币的完整数据
 
 	// 盈利分布计数器
 	var winLevel1, winLevel2, winLevel3, winLevel4 int64 // 0-200%, 200-500%, 500-1000%, >1000%
@@ -294,6 +295,7 @@ func (calc *UserReportCalculator) calculatePnLMetrics(userReport *mysql.UserRepo
 			if totalPnL > topProfitPnL {
 				topProfitPnL = totalPnL
 				topProfitToken = tokenAddr
+				topProfitTokenData = tokenData // 保存完整的代币数据用于后续计算
 			}
 		} else if totalPnL < 0 {
 			pnlLossCount++
@@ -328,6 +330,34 @@ func (calc *UserReportCalculator) calculatePnLMetrics(userReport *mysql.UserRepo
 
 	userReport.TopProfitTokenAddress = topProfitToken
 	userReport.TopLossTokenAddress = topLossToken
+
+	// 计算新增的三个字段
+	// 1. TopProfitUsdAmount - 最多盈利的代币盈利金额（USD）
+	if topProfitPnL > 0 {
+		// 将SOL本位的盈利转换为USD金额
+		// 这里假设盈利已经是USD金额，如果是SOL本位需要转换
+		userReport.TopProfitUsdAmount = fmt.Sprintf("%.6f", topProfitPnL)
+	} else {
+		userReport.TopProfitUsdAmount = "0.000000"
+	}
+
+	// 2. TopLossUsdAmount - 最多损失的代币损失金额（USD）
+	if topLossPnL < 0 {
+		// 取绝对值，转换为正数表示损失金额
+		userReport.TopLossUsdAmount = fmt.Sprintf("%.6f", math.Abs(topLossPnL))
+	} else {
+		userReport.TopLossUsdAmount = "0.000000"
+	}
+
+	// 3. TopProfitWinRate - 最多盈利的代币的胜率/翻了多少倍
+	if topProfitTokenData != nil && topProfitTokenData.TotalBuyValue > 0 {
+		// 计算盈利倍数：盈利金额 / 投入成本
+		profitMultiplier := topProfitPnL / topProfitTokenData.TotalBuyValue
+		// 例如：投入100，盈利200，倍数为2（翻了2倍）
+		userReport.TopProfitWinRate = fmt.Sprintf("%.4f", profitMultiplier)
+	} else {
+		userReport.TopProfitWinRate = "0.0000"
+	}
 
 	// 盈利分布
 	userReport.WinLevelOneCount = winLevel1
