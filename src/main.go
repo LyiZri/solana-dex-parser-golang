@@ -1,11 +1,17 @@
 package main
 
 import (
+	"fmt"
+	"os"
+	"runtime"
+	"strconv"
 	"sync"
+	"time"
 
 	"github.com/go-solana-parse/src/config"
-	"github.com/go-solana-parse/src/db"
-	"github.com/go-solana-parse/src/processor/user_report_processor"
+	"github.com/go-solana-parse/src/model"
+	rpccall "github.com/go-solana-parse/src/rpc_call"
+	"github.com/go-solana-parse/src/solana"
 )
 
 var twg sync.WaitGroup
@@ -20,11 +26,12 @@ func main() {
 	startTime := time.Now()
 
 	var failedSlots []uint64
+	var failedSlotsMutex sync.Mutex // 🔒 添加互斥锁保护failedSlots
 
 	// startSlot := uint64(263922023)
 	startSlot := uint64(247806009) // 🎯 恢复原始大范围处理
 
-	endSlot := uint64(335375717) // 🎯 约1亿个区块
+	endSlot := uint64(334763228) // 🎯 约1亿个区块
 
 	cycleSize := 100
 
@@ -53,7 +60,7 @@ func main() {
 		// 🔧 每组开始前监控goroutines
 		fmt.Printf("🔧 开始第%d组 (共%d组)，当前 goroutines: %d\n", batchIndex+1, len(batchesOf30), runtime.NumGoroutine())
 
-		startTime := time.Now()
+		groupStartTime := time.Now()
 		var wg sync.WaitGroup
 		for _, currentBatch := range batchGroup { // 内层并发
 			wg.Add(1)
@@ -66,7 +73,10 @@ func main() {
 				for _, slot := range batch {
 					block, exists := results[slot]
 					if !exists || block == nil {
+						// 🔒 加锁保护failedSlots写入
+						failedSlotsMutex.Lock()
 						failedSlots = append(failedSlots, slot)
+						failedSlotsMutex.Unlock()
 						continue
 					}
 					if len(block.Transactions) == 0 {
@@ -104,7 +114,7 @@ func main() {
 
 		// 🔧 每组完成后强制GC并监控
 		runtime.GC()
-		elapsed := time.Since(startTime)
+		elapsed := time.Since(groupStartTime)
 		fmt.Printf("✅ 第%d组完成，耗时: %.1fs，当前 goroutines: %d\n", batchIndex+1, elapsed.Seconds(), runtime.NumGoroutine())
 
 		if len(batchGroup) > 0 && len(batchGroup[0]) > 0 {
