@@ -1,0 +1,6 @@
+.cursor
+config-yaml/
+test_logs/
+examples/
+main
+nohup.out

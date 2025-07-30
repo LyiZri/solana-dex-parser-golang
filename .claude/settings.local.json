@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go run:*)",
+      "Bash(go test:*)",
+      "Bash(echo $SHELL)",
+      "Bash(zsh:*)",
+      "Bash(brew install:*)",
+      "Bash(git clone:*)",
+      "Bash(source:*)",
+      "Bash(chmod:*)",
+      "Bash(~/terminal_final_setup.sh)",
+      "Bash(alias ll)",
+      "Bash(echo)",
+      "Bash(rm:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(clickhouse-client:*)",
+      "Bash(go build:*)",
+      "Bash(find:*)",
+      "Bash(cat:*)"
+    ],
+    "deny": []
+  }
+}

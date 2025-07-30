@@ -1,0 +1,23 @@
+{
+    "go.goroot": "/Users/a11111/.gvm/gos/go1.23.11",
+    "go.gopath": "/Users/a11111/.gvm/pkgsets/go1.23.11/global",
+    "go.alternateTools": {
+        "go": "/Users/a11111/.gvm/gos/go1.23.11/bin/go",
+        "dlv": "/Users/a11111/.gvm/pkgsets/go1.23.11/global/bin/dlv"
+    },
+    "go.toolsEnvVars": {
+        "GOROOT": "/Users/a11111/.gvm/gos/go1.23.11",
+        "PATH": "/Users/a11111/.gvm/gos/go1.23.11/bin:/Users/a11111/.gvm/pkgsets/go1.23.11/global/bin:${env:PATH}"
+    },
+    "go.delveConfig": {
+        "dlvLoadConfig": {
+            "followPointers": true,
+            "maxVariableRecurse": 1,
+            "maxStringLen": 64,
+            "maxArrayValues": 64,
+            "maxStructFields": -1
+        },
+        "apiVersion": 2,
+        "showGlobalVariables": false
+    }
+} 
